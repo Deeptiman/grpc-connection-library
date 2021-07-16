@@ -7,6 +7,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/status"
 	pb "grpc-connection-library/ping"
+	pool "grpc-connection-library/pool"
 	"io/ioutil"
 	"net"
 	"os"
@@ -40,6 +41,7 @@ type GRPC struct {
 	options *GRPCOption
 	server  *grpc.Server
 	client  *grpc.ClientConn
+	pool    *pool.ConnPool
 	log     grpclog.LoggerV2
 }
 
@@ -70,7 +72,12 @@ func NewGRPCConnection(opts ...Options) (*GRPC, error) {
 		return grpcConn, grpcConn.ListenAndServe()
 	case Client:
 		fmt.Println("Connecting to GRPC Client....")
-		return grpcConn, grpcConn.ClientConn()
+
+		conn, _ := grpcConn.ClientConn()
+		grpcConn.pool = pool.NewConnPool(60)
+		grpcConn.pool.CreateConnectionPool(conn)
+
+		return grpcConn, nil
 	}
 
 	return grpcConn, nil
@@ -98,7 +105,7 @@ func (g *GRPC) ListenAndServe() error {
 	return nil
 }
 
-func (g *GRPC) ClientConn() error {
+func (g *GRPC) ClientConn() (*grpc.ClientConn, error) {
 
 	var opts []grpc.DialOption
 
@@ -124,21 +131,21 @@ func (g *GRPC) ClientConn() error {
 	conn, err := grpc.Dial(g.options.address, opts...)
 	if err != nil {
 		g.log.Fatal(err)
-		return err
+		return nil, err
 	}
 	g.client = conn
-	defer conn.Close()
+	//defer conn.Close()
 	client := pb.NewPingServiceClient(g.client)
 
 	g.log.Infoln("GRPC Client connected at - address : ", g.options.address, " : ConnState = ", g.client.GetState())
 
 	respMsg, err := pb.SendPingMsg(client)
 	if err != nil {
-		return fmt.Errorf(" failed connect with address - %s err - %v", g.options.address, err)
+		return nil, fmt.Errorf(" failed connect with address - %s err - %v", g.options.address, err)
 	}
 	g.log.Infoln("GRPC Pong msg - ", respMsg)
 
-	return nil
+	return g.client, nil
 }
 
 func isRetriable(err error, callOpts RetryOption) bool {
