@@ -18,11 +18,12 @@ type ConnectionInterceptor int
 type ConnectionType int
 
 var (
-	DefaultConnectionType = Client
-	DefaultInsecureState  = true
-	DefaultScheme         = "dns"
-	DefaultPort           = "9000"
-	DefaultInterceptor    = UnaryClient
+	DefaultConnectionType        = Client
+	DefaultInsecureState         = true
+	DefaultScheme                = "dns"
+	DefaultPort                  = "9000"
+	DefaultPoolSize       uint64 = 10
+	DefaultInterceptor           = UnaryClient
 
 	RetriableCodes = []codes.Code{codes.ResourceExhausted, codes.Unavailable}
 )
@@ -52,10 +53,12 @@ func NewGRPCConnection(opts ...Options) (*GRPC, error) {
 			connectionType: DefaultConnectionType,
 			insecure:       DefaultInsecureState,
 			interceptor:    DefaultInterceptor,
+			poolSize:       DefaultPoolSize,
 			port:           DefaultPort,
 			scheme:         DefaultScheme,
 		},
-		log: grpclog.NewLoggerV2(os.Stdout, ioutil.Discard, ioutil.Discard),
+		pool: pool.NewConnPool(DefaultPoolSize),
+		log:  grpclog.NewLoggerV2(os.Stdout, ioutil.Discard, ioutil.Discard),
 	}
 
 	grpclog.SetLoggerV2(grpcConn.log)
@@ -63,6 +66,8 @@ func NewGRPCConnection(opts ...Options) (*GRPC, error) {
 	for _, opt := range opts {
 		opt(grpcConn)
 	}
+
+	grpcConn.pool = pool.NewConnPool(grpcConn.options.poolSize)
 
 	fmt.Println("NewGRPCConnection ! ConnectionType : ", grpcConn.options.connectionType)
 
@@ -73,8 +78,12 @@ func NewGRPCConnection(opts ...Options) (*GRPC, error) {
 	case Client:
 		fmt.Println("Connecting to GRPC Client....")
 
-		conn, _ := grpcConn.ClientConn()
-		grpcConn.pool = pool.NewConnPool(60)
+		conn, err := grpcConn.ClientConn()
+		if err != nil {
+			fmt.Println("ClientConn Error : ", err.Error())
+			return &GRPC{}, err
+		}
+
 		grpcConn.pool.CreateConnectionPool(conn)
 
 		return grpcConn, nil

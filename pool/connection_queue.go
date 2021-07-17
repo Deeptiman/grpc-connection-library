@@ -1,15 +1,16 @@
 package pool
 
 import (
+	"container/list"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"sync/atomic"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
 
 type Queue struct {
-	items   []interface{}
+	items   *list.List
+	size    uint64
 	watcher chan chan interface{}
 	sem     *Semaphore
 	log     *log.Logger
@@ -19,7 +20,8 @@ type Queue struct {
 
 func NewQueue(size uint64) *Queue {
 	q := &Queue{
-		items:   make([]interface{}, 0),
+		items:   list.New(),
+		size:    size,
 		watcher: make(chan chan interface{}, 100),
 		sem:     NewSemaphore(size),
 		log:     log.New(),
@@ -31,7 +33,8 @@ func (q *Queue) Enqueue(item interface{}) {
 
 	q.sem.Lock()
 	defer q.sem.Unlock()
-	q.items = append(q.items, item)
+
+	q.items.PushBack(item)
 
 	log.WithFields(log.Fields{"AddItem": item}).Info("Enqueue")
 
@@ -45,13 +48,12 @@ func (q *Queue) Dequeue() interface{} {
 	q.sem.RLock()
 	defer q.sem.RUnlock()
 
-	if len(q.items) == 0 {
+	if q.items.Len() == 0 {
 		log.WithFields(log.Fields{"Empty Item": ""}).Warning("Dequeue")
 		return nil
 	}
 
-	dequeueItem := q.items[0]
-	q.items = q.items[1:]
+	dequeueItem := q.items.Front().Value
 
 	log.WithFields(log.Fields{"Get Item": dequeueItem}).Debugln("Dequeue")
 
@@ -96,28 +98,16 @@ func (q *Queue) getTotalDeQueue() int32 {
 	return atomic.LoadInt32(&q.qu)
 }
 
-func (q *Queue) GetItem(index int) (interface{}, error) {
-
-	q.sem.RLock()
-	defer q.sem.RUnlock()
-
-	if len(q.items) <= index {
-		return nil, fmt.Errorf("Index out of range")
-	}
-
-	return q.items[index], nil
-}
-
 func (q *Queue) Front() interface{} {
 
 	q.sem.RLock()
 	defer q.sem.RUnlock()
 
-	return q.items[0]
+	return q.items.Front().Value
 }
 
 func (q *Queue) IsEmpty() bool {
-	return len(q.items) == 0
+	return q.items.Len() == 0
 }
 
 func (q *Queue) GetCapacity() int {
@@ -125,7 +115,7 @@ func (q *Queue) GetCapacity() int {
 	q.sem.RLock()
 	defer q.sem.RUnlock()
 
-	return cap(q.items)
+	return q.items.Len()
 }
 
 func (q *Queue) GetLen() int {
@@ -133,7 +123,7 @@ func (q *Queue) GetLen() int {
 	q.sem.RLock()
 	defer q.sem.RUnlock()
 
-	return len(q.items)
+	return q.items.Len()
 }
 
 func (q *Queue) RemoveElement(index int) error {
@@ -141,11 +131,11 @@ func (q *Queue) RemoveElement(index int) error {
 	q.sem.Lock()
 	defer q.sem.Unlock()
 
-	if len(q.items) <= index {
+	if q.items.Len() <= index {
 		return fmt.Errorf("index out of range")
 	}
 
-	q.items = append(q.items[:index], q.items[index+1:]...)
+	q.items.Remove(q.items.Front())
 
 	return nil
 }

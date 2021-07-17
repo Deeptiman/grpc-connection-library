@@ -2,10 +2,7 @@ package pool
 
 import (
 	"container/list"
-	"context"
-	"fmt"
 	batch "github.com/Deeptiman/go-batch"
-	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"io/ioutil"
@@ -41,87 +38,50 @@ func NewConnPool(maxPoolSize uint64) *ConnPool {
 
 func (c *ConnPool) CreateConnectionPool(conn *grpc.ClientConn) {
 
-	errs, _ := errgroup.WithContext(context.Background())
+	connReplicas := func(conn *grpc.ClientConn) <-chan *grpc.ClientConn {
+		c.Log.Infoln("createConnectionReplicas ...")
 
-	replicaCh := make(chan bool)
-	batchCh := make(chan bool)
-	enqueCh := make(chan bool)
+		connInstanceCh := make(chan *grpc.ClientConn)
 
-	errs.Go(func() error {
+		go func() {
+			defer close(connInstanceCh)
+			for i := 0; uint64(i) < c.MaxPoolSize; i++ {
 
-		c.createConnectionReplicas(conn)
-
-		replicaCh <- true
-
-		return nil
-	})
-
-	errs.Go(func() error {
-
-		select {
-		case <-replicaCh:
-			c.createConnectionBatch()
-			batchCh <- true
-		}
-		return nil
-	})
-
-	errs.Go(func() error {
-
-		select {
-		case <-batchCh:
-
-			c.Log.Infoln("Batch Size ------ ", len(c.ConnInstanceBatch.Consumer.Supply.ClientSupplyCh))
-			for bt := range c.ConnInstanceBatch.Consumer.Supply.ClientSupplyCh {
-				c.Log.Infoln("Reading Conn Batches : Total Size = ", len(bt))
-				c.EnqueConnBatch(bt)
+				select {
+				case connInstanceCh <- conn:
+				}
 			}
-			c.Log.Infoln("Conn Batch Reading Complete!")
-			enqueCh <- true			
-		}
+		}()
+		return connInstanceCh
+	}
 
-		return nil
-	})
+	connBatch := func(connInstanceCh <-chan *grpc.ClientConn) chan []batch.BatchItems {
+		c.Log.Infoln("createConnectionBatch ...")
 
-	errs.Go(func() error {
-		select {
-		case <-enqueCh:
+		go func() {
 
-			c.Log.Infoln(" ConnBatchQueue.GetLen() --- ", c.ConnBatchQueue.GetLen())
-			for c.ConnBatchQueue.GetLen() > 0 {
-				c.GetConnBatch()
+			c.ConnInstanceBatch.StartBatchProcessing()
+
+			for conn := range connInstanceCh {
+				select {
+				case c.ConnInstanceBatch.Item <- conn:
+				}
 			}
+		}()
+
+		return c.ConnInstanceBatch.Consumer.Supply.ClientSupplyCh
+	}
+
+	connSupplyCh := connBatch(connReplicas(conn))
+
+	for supply := range connSupplyCh {
+
+		c.EnqueConnBatch(supply)
+		for _, s := range supply {
+			c.Log.Infoln("Conn", " Id - ", s.Id, " -- Batch.No : ", s.BatchNo, " - ConnState : ", s.Item.(*grpc.ClientConn).GetState().String())
 		}
-		return nil
-	})
-
-	if err := errs.Wait(); err != nil {
-		c.Log.Infoln("Error Conn Pool - ", err.Error())
-		return
+		c.Log.Infoln(" ------------------------------------------------- ")
 	}
-
-}
-
-func (c *ConnPool) createConnectionReplicas(conn *grpc.ClientConn) {
-	c.Log.Infoln("createConnectionReplicas ...")
-	for i := 0; uint64(i) < c.MaxPoolSize; i++ {
-		c.ConnInstanceReplicas.PushFront(conn)
-	}
-}
-
-func (c *ConnPool) createConnectionBatch() {
-
-	c.Log.Infoln("createConnectionBatch ...")
-
-	c.ConnInstanceBatch.StartBatchProcessing()
-
-	for c.ConnInstanceReplicas.Len() > 0 {
-
-		if conn, _ := c.getConnReplicas(); conn != nil {
-			c.ConnInstanceBatch.Item <- conn
-		}
-	}
-	c.ConnInstanceBatch.Close()
 }
 
 func (c *ConnPool) EnqueConnBatch(connItems []batch.BatchItems) {
@@ -135,17 +95,12 @@ func (c *ConnPool) GetConnBatch() []batch.BatchItems {
 	return queueItems.([]batch.BatchItems)
 }
 
-func (c *ConnPool) getConnReplicas() (*grpc.ClientConn, error) {
-
-	c.Log.Infoln("getConnReplicas ...")
-
-	if c.ConnInstanceReplicas.Len() > 0 {
-		if conn, ok := c.ConnInstanceReplicas.Front().Value.(*grpc.ClientConn); ok {
-			c.ConnInstanceReplicas.Remove(c.ConnInstanceReplicas.Front())
-			return conn, nil
+func (c *ConnPool) IterateConnBatch() {
+	c.Log.Infoln(" IterateConnBatch ... ")
+	for c.ConnBatchQueue.GetLen() > 0 {
+		items := c.GetConnBatch()
+		for i, item := range items {
+			c.Log.Infoln(" ConnBatchQueue", "Iterate--", i, " === BatchNo : ", item.BatchNo, " === BatchID : ", item.Id, " -- ConnState : ", item.Item.(*grpc.ClientConn).GetState().String())
 		}
-		return nil, fmt.Errorf("Failed to retrieve conn instance from stack!")
 	}
-
-	return nil, fmt.Errorf("Conn Replica Stack is empty!")
 }

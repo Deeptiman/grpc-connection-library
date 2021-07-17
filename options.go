@@ -14,6 +14,7 @@ type GRPCOption struct {
 	authority      string
 	insecure       bool
 	scheme         string
+	poolSize       uint64
 	retryOption    RetryOption
 	serverOptions  []grpc.ServerOption
 	credentials    credentials.TransportCredentials
@@ -27,6 +28,12 @@ type RetryOption struct {
 }
 
 type Options func(*GRPC)
+
+func WithMaxConnPoolSize(size uint64) Options {
+	return func(g *GRPC) {
+		g.options.poolSize = size
+	}
+}
 
 func WithConnectionType(connectionType ConnectionType) Options {
 	return func(g *GRPC) {
