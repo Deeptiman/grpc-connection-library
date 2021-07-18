@@ -36,17 +36,15 @@ func NewConnPool(maxPoolSize uint64) *ConnPool {
 	}
 }
 
-func (c *ConnPool) CreateConnectionPool(conn *grpc.ClientConn) {
+func (c *ConnPool) ConnectionPoolPipeline(conn *grpc.ClientConn) {
 
+	// 1
 	connReplicas := func(conn *grpc.ClientConn) <-chan *grpc.ClientConn {
-		c.Log.Infoln("createConnectionReplicas ...")
-
 		connInstanceCh := make(chan *grpc.ClientConn)
-
 		go func() {
+			c.Log.Infoln("1#connReplicas ...")
 			defer close(connInstanceCh)
 			for i := 0; uint64(i) < c.MaxPoolSize; i++ {
-
 				select {
 				case connInstanceCh <- conn:
 				}
@@ -54,33 +52,45 @@ func (c *ConnPool) CreateConnectionPool(conn *grpc.ClientConn) {
 		}()
 		return connInstanceCh
 	}
-
+	
+	// 2
 	connBatch := func(connInstanceCh <-chan *grpc.ClientConn) chan []batch.BatchItems {
-		c.Log.Infoln("createConnectionBatch ...")
-
+		
 		go func() {
-
-			c.ConnInstanceBatch.StartBatchProcessing()
-
+			c.Log.Infoln("2#connBatch ...")	
+			c.ConnInstanceBatch.StartBatchProcessing()		
 			for conn := range connInstanceCh {
 				select {
 				case c.ConnInstanceBatch.Item <- conn:
 				}
 			}
 		}()
-
 		return c.ConnInstanceBatch.Consumer.Supply.ClientSupplyCh
 	}
-
-	connSupplyCh := connBatch(connReplicas(conn))
-
-	for supply := range connSupplyCh {
-
-		c.EnqueConnBatch(supply)
-		for _, s := range supply {
-			c.Log.Infoln("Conn", " Id - ", s.Id, " -- Batch.No : ", s.BatchNo, " - ConnState : ", s.Item.(*grpc.ClientConn).GetState().String())
-		}
-		c.Log.Infoln(" ------------------------------------------------- ")
+	
+	// 3
+	connEnqueue := func(connSupplyCh <-chan []batch.BatchItems) <-chan batch.BatchItems {
+		receiveBatchCh := make(chan batch.BatchItems)
+		go func(){
+			c.Log.Infoln("3#connEnqueue ...")
+			defer close(receiveBatchCh)
+			for supply := range connSupplyCh {
+	
+				c.EnqueConnBatch(supply)
+				for _, s := range supply {					
+					select {
+					case receiveBatchCh <- s:
+					}
+				}
+				c.Log.Infoln(" ------------------------------------------------- ")
+			}
+		}()
+		return receiveBatchCh
+	}
+	
+	// Pipeline	
+	for s := range connEnqueue(connBatch(connReplicas(conn))) {
+		c.Log.Infoln("Batch Receive : Conn", " Id - ", s.Id, " -- Batch.No : ", s.BatchNo, " -- Queue Size : ", c.ConnBatchQueue.GetLen(), " --  MaxQueue Size : ", c.ConnBatchQueue.size," - ConnState : ", s.Item.(*grpc.ClientConn).GetState().String())
 	}
 }
 
