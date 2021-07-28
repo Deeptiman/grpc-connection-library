@@ -2,10 +2,9 @@ package main
 
 import (
 	"fmt"
-	"sync/atomic"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/status"
 	pb "grpc-connection-library/ping"
@@ -13,6 +12,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"time"
 )
 
 type ConnectionInterceptor int
@@ -28,8 +28,6 @@ var (
 	DefaultPort                  = "9000"
 	DefaultPoolSize       uint64 = 60
 	DefaultInterceptor           = UnaryClient
-
-	ConnIndex 		uint64 = 0
 
 	RetriableCodes = []codes.Code{codes.ResourceExhausted, codes.Unavailable}
 )
@@ -95,8 +93,10 @@ func NewGRPCConnection(opts ...Options) (*GRPC, error) {
 			fmt.Println("ClientConn Error : ", err.Error())
 			return &GRPC{}, err
 		}
-		
-		grpcConn.pool.ConnectionPoolPipeline(conn)
+
+		grpcConn.pool.Conn = conn
+
+		grpcConn.GetConn()
 
 		return grpcConn, nil
 	}
@@ -171,48 +171,35 @@ func (g *GRPC) ClientConn() (*grpc.ClientConn, error) {
 
 func (g *GRPC) GetConn() (*grpc.ClientConn, error) {
 
-	connBatch := g.pool.GetConnBatch()
-
-	if len(connBatch) == 0 {
+	// Testing conn
+	connTry := g.pool.MaxPoolSize
+	for connTry > 0 {
+		batchItem := g.pool.GetConnBatch()
+		if batchItem.Item == nil {
+			return nil, fmt.Errorf("No Grpc connection instance found")
+		}
+		fmt.Println("ConnTry=", connTry, " : GRPC Conn -- ", batchItem.Item.(*grpc.ClientConn).GetState().String())
+		connTry--
+		time.Sleep(1 * time.Second)
 	}
-
-	idx := g.GetConnIndex()
-
-
-
-	conn := connBatch[idx].Item.(*grpc.ClientConn)
-
-	if conn.GetState().String() == g.GetGrpcConnectivityState(Ready) {
-		g.IncreaseConnIndex()
-		return conn, nil
-	}
-
 	return nil, nil
-}	
-
-func (g *GRPC) GetConnIndex() uint64 {
-	return atomic.LoadUint64(&ConnIndex)
-}
-
-func (g *GRPC) IncreaseConnIndex() {
-	atomic.AddUint64(&ConnIndex, 1)
 }
 
 func (g *GRPC) GetGrpcConnectivityState(state ConnState) string {
 
 	switch state {
-		case Idle:
-			return "IDLE"
-		case Connecting:
-			return "CONNECTING"
-		case Ready:
-			return "READY"
-		case TransientFailure:
-			return "TRANSIENT_FAILURE"
-		case ShutDown:
-			return "SHUTDOWN"
-		default:
-			return "Invalid-State"
+	case Idle:
+		return "IDLE"
+	case Connecting:
+		return "CONNECTING"
+	case Ready:
+		return "READY"
+	case TransientFailure:
+		return "TRANSIENT_FAILURE"
+	case ShutDown:
+		return "SHUTDOWN"
+	default:
+		return "Invalid-State"
 	}
 }
 

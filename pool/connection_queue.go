@@ -3,15 +3,16 @@ package pool
 import (
 	"container/list"
 	"fmt"
+	batch "github.com/Deeptiman/go-batch"
 	log "github.com/sirupsen/logrus"
 	"sync/atomic"
-	"time"
 )
 
 type Queue struct {
 	items   *list.List
 	size    uint64
 	watcher chan chan interface{}
+	enqueCh []chan batch.BatchItems
 	sem     *Semaphore
 	log     *log.Logger
 	en      int32
@@ -23,24 +24,29 @@ func NewQueue(size uint64) *Queue {
 		items:   list.New(),
 		size:    size,
 		watcher: make(chan chan interface{}, 100),
+		enqueCh: make([]chan batch.BatchItems, 0, size),
 		sem:     NewSemaphore(size),
 		log:     log.New(),
 	}
 	return q
 }
 
-func (q *Queue) Enqueue(item interface{}) {
+func (q *Queue) enqueItemCh(enCh chan<- batch.BatchItems, item batch.BatchItems) {
+	enCh <- item
+	close(enCh)
+}
+
+func (q *Queue) Enqueue(item batch.BatchItems) {
 
 	q.sem.Lock()
 	defer q.sem.Unlock()
 
 	q.items.PushBack(item)
 
-	log.WithFields(log.Fields{"AddItem": item}).Info("Enqueue")
+	enCh := make(chan batch.BatchItems)
+	q.enqueCh = append(q.enqueCh, enCh)
+	go q.enqueItemCh(enCh, item)
 
-	atomic.AddInt32(&q.en, 1)
-
-	time.Sleep(100 * time.Millisecond)
 }
 
 func (q *Queue) Dequeue() interface{} {
@@ -48,44 +54,39 @@ func (q *Queue) Dequeue() interface{} {
 	q.sem.RLock()
 	defer q.sem.RUnlock()
 
-	if q.items.Len() == 0 {
-		log.WithFields(log.Fields{"Empty Item": ""}).Warning("Dequeue")
-		return nil
-	}
-
 	dequeueItem := q.items.Front().Value
 
-	log.WithFields(log.Fields{"Get Item": dequeueItem}).Debugln("Dequeue")
+	log.Infoln("Dequeue", "Pop Item ---- ", dequeueItem.(batch.BatchItems).BatchNo)
 
 	return dequeueItem
 }
 
-func (q *Queue) GetItems() interface{} {
+func (q *Queue) GetItems() chan interface{} {
 
-	responseCh := make(chan interface{})
-	defer close(responseCh)
+	go q.dispatcher(q.watcher)
 
-	if q.getTotalDeQueue() <= 2 {
-		q.log.WithFields(log.Fields{"Listen Item": ""}).Warning("Listener")
-		go func() {
-			q.listener()
-		}()
-	}
+	requestCh := make(chan interface{})
 
-	q.watcher <- responseCh
+	q.watcher <- requestCh
 
-	response := <-responseCh
-	atomic.AddInt32(&q.qu, 1)
-	return response
+	return <-q.watcher
 }
 
-func (q *Queue) listener() {
+func (q *Queue) GetEnqueCh(index int) chan batch.BatchItems {
+	return q.enqueCh[index]
+}
+
+func (q *Queue) GetEnqueIndex() int {
+	return len(q.enqueCh) - 1
+}
+
+func (q *Queue) dispatcher(requestCh <-chan chan interface{}) {
 
 	for {
 		select {
-		case responseCh := <-q.watcher:
-			responseCh <- q.Dequeue()
-			time.Sleep(100 * time.Millisecond)
+		case requestChan := <-requestCh:
+			q.log.Infoln("Dispatch Request from Watcher")
+			requestChan <- q.Dequeue()
 		}
 	}
 }
