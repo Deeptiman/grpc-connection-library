@@ -162,26 +162,25 @@ func (c *ConnPool) GetConnBatch() batch.BatchItems {
 	defer close(batchItemCh)
 	go c.ConnectionPoolPipeline(c.Conn, c.PipelineDoneChan)
 
-	for {
-		select {
-		case <-c.PipelineDoneChan:
-			c.Log.Infoln("Pipeline Done Channel !")
-			defer c.recoverInvalidSelect()
+	select {
+	case <-c.PipelineDoneChan:
+		c.Log.Infoln("Pipeline Done Channel !")
+		defer c.recoverInvalidSelect()
 
-			for {
-				chosen, rcv, ok := reflect.Select(c.ConnSelect)
-				if !ok {
-					c.Log.Infoln("Conn Batch Instance Not Chosen = ", chosen)
-					continue
-				}
-				c.Log.Infoln("SelectCase", "Batch Conn : chosen = ", chosen, " : channel = ", c.ConnSelect[chosen], " : received = ", rcv)
-				poolSize := c.GetConnPoolSize() - 1
-				atomic.StoreUint64(&ConnPoolPipeline, poolSize)
-
-				return rcv.Interface().(batch.BatchItems)
+		for {
+			chosen, rcv, ok := reflect.Select(c.ConnSelect)
+			if !ok {
+				c.Log.Infoln("Conn Batch Instance Not Chosen = ", chosen)
+				continue
 			}
+			c.Log.Infoln("SelectCase", "Batch Conn : chosen = ", chosen, " : channel = ", c.ConnSelect[chosen], " : received = ", rcv)
+			poolSize := c.GetConnPoolSize() - 1
+			atomic.StoreUint64(&ConnPoolPipeline, poolSize)
+
+			return rcv.Interface().(batch.BatchItems)
 		}
 	}
+
 }
 
 func (c *ConnPool) GetConnPoolSize() uint64 {
