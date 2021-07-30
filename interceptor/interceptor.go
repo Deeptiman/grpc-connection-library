@@ -3,9 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
-
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"grpc-connection-library/retry"
 )
+
+type RetryOption struct {
+	retry   int
+	backoff *retry.Backoff
+	codes   []codes.Code
+}
 
 func UnaryClientInterceptor(retryOpts RetryOption) grpc.UnaryClientInterceptor {
 
@@ -21,17 +28,6 @@ func UnaryClientInterceptor(retryOpts RetryOption) grpc.UnaryClientInterceptor {
 			err = invoker(parentCtx, method, req, reply, cc, opts...)
 			if err == nil {
 				return nil
-			}
-
-			if err != nil {
-
-				if isContextError(err) {
-					return err
-				}
-
-				if !isRetriable(err, retryOpts) {
-					return err
-				}
 			}
 
 			fmt.Println("grpc-retry : attempt = ", attempt)

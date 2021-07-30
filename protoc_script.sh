@@ -1,0 +1,1 @@
+protoc -I C:/Users/asusd/go/pkg/mod/protobuf/src --proto_path ping --go_out=plugins=grpc:ping ping.proto
