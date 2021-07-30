@@ -99,7 +99,7 @@ func (c *ConnPool) ClientConn() (*grpc.ClientConn, error) {
 		// 	fmt.Println("UnaryClient ....")
 		// 	opts = append(opts, grpc.WithUnaryInterceptor(UnaryClientInterceptor(c.Options.retryOption)))
 		// }
-		
+
 		c.Log.Infoln("Dial GRPC Server ....", c.Options.address)
 
 		conn, err := grpc.Dial(c.Options.address, opts...)

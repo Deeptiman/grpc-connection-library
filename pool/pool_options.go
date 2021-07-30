@@ -1,8 +1,8 @@
 package pool
 
 import (
-	"grpc-connection-library/retry"
 	"google.golang.org/grpc/codes"
+	"grpc-connection-library/retry"
 )
 
 type PoolConnOptions struct {
@@ -10,7 +10,7 @@ type PoolConnOptions struct {
 	host        string
 	port        string
 	interceptor ConnectionInterceptor
-	retryOption *retry.RetryOption		
+	retryOption *retry.RetryOption
 	authority   string
 	insecure    bool
 	scheme      string

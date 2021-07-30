@@ -1,14 +1,14 @@
 package retry
 
 import (
-	"os"
-	"io/ioutil"
 	"errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/status"
+	"io/ioutil"
+	"os"
 )
 
 type RetryOption struct {
@@ -29,9 +29,9 @@ const (
 )
 
 var (
-	ErrRetryMaxLimit = errors.New("Retry Limit Exceed!")
+	ErrRetryMaxLimit      = errors.New("Retry Limit Exceed!")
 	DefaultRetryCount int = 5
-	log = grpclog.NewLoggerV2(os.Stdout, ioutil.Discard, ioutil.Discard)
+	log                   = grpclog.NewLoggerV2(os.Stdout, ioutil.Discard, ioutil.Discard)
 )
 
 type ClientConnFactory func(address string) (*grpc.ClientConn, error)
@@ -57,12 +57,12 @@ func RetryClientConnection(factory ClientConnFactory, retryOption *RetryOption) 
 
 			if err := retryOption.retryBackoff(i); err != nil {
 				return nil, err
-			}	
+			}
 
 			continue
 		}
 
-		if conn != nil && failedConnState(conn.GetState()){
+		if conn != nil && failedConnState(conn.GetState()) {
 			if err := retryOption.retryBackoff(i); err != nil {
 				return nil, err
 			}
@@ -93,12 +93,12 @@ func isContextError(err error) bool {
 
 func failedConnState(state connectivity.State) bool {
 
-	return state == connectivity.TransientFailure || 
-	state == connectivity.Shutdown
+	return state == connectivity.TransientFailure ||
+		state == connectivity.Shutdown
 }
 
-func(r *RetryOption) retryBackoff(attempt int) error {
-	
+func (r *RetryOption) retryBackoff(attempt int) error {
+
 	log.Infoln("grpc:connect:error - retry=", attempt)
 
 	r.Backoff.ApplyBackoffDuration(attempt)
