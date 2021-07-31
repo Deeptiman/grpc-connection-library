@@ -8,7 +8,7 @@ import (
 
 type PoolConnOptions struct {
 	address     string
-	port		string
+	port        string
 	interceptor ConnectionInterceptor
 	retryOption *retry.RetryOption
 	credentials credentials.TransportCredentials

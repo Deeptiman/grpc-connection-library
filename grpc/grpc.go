@@ -22,8 +22,7 @@ type ConnState connectivity.State
 var (
 	DefaultConnectionType        = Client
 	DefaultInsecureState         = true
-	DefaultScheme                = "dns"
-	DefaultPort                  = "50051"
+	DefaultServerPort            = "50051"
 	DefaultPoolSize       uint64 = 60
 
 	RetriableCodes = []codes.Code{codes.ResourceExhausted, codes.Unavailable}
@@ -53,7 +52,8 @@ type GRPC struct {
 func NewGRPCConnection(opts ...Options) (*GRPC, error) {
 
 	grpcConn := &GRPC{
-		connectionType: DefaultConnectionType,		
+		connectionType: DefaultConnectionType,
+		serverPort:     DefaultServerPort,
 		log:            grpclog.NewLoggerV2(os.Stdout, ioutil.Discard, ioutil.Discard),
 	}
 
