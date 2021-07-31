@@ -3,9 +3,7 @@ package pool
 import (
 	"container/list"
 	"fmt"
-	batch "github.com/Deeptiman/go-batch"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/grpclog"
+	interceptor "grpc-connection-library/interceptor"
 	pb "grpc-connection-library/ping"
 	retry "grpc-connection-library/retry"
 	"io/ioutil"
@@ -13,6 +11,11 @@ import (
 	"reflect"
 	"sync"
 	"sync/atomic"
+
+	batch "github.com/Deeptiman/go-batch"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/grpclog"
 )
 
 type ConnPool struct {
@@ -33,16 +36,15 @@ type ConnectionInterceptor int
 const (
 	UnaryServer ConnectionInterceptor = iota
 	UnaryClient
-	StreamServer
-	StreamClient
 )
 
 var (
-	DefaultConnBatch    uint64                = 20
-	DefaultMaxPoolSize  uint64                = 60
-	DefaultScheme       string                = "dns"
-	DefaultGrpcInsecure bool                  = true
-	DefaultInterceptor  ConnectionInterceptor = UnaryClient
+	DefaultConnBatch      uint64                = 20
+	DefaultMaxPoolSize    uint64                = 60
+	DefaultScheme         string                = "dns"
+	DefaultGrpcInsecure   bool                  = true
+	DefaultInterceptor    ConnectionInterceptor = UnaryClient
+	DefaultRetriableCodes                       = []codes.Code{codes.Aborted, codes.Unknown, codes.ResourceExhausted, codes.Unavailable}
 
 	ConnIndex         uint64 = 0
 	ConnPoolPipeline  uint64 = 0
@@ -61,10 +63,15 @@ func NewConnPool(opts ...PoolOptions) *ConnPool {
 		ConnBatchQueue:       NewQueue(DefaultMaxPoolSize),
 		ConnSelect:           make([]reflect.SelectCase, DefaultMaxPoolSize),
 		Options: &PoolConnOptions{
-			insecure: DefaultGrpcInsecure,
-			scheme:   DefaultScheme,
+			insecure:    DefaultGrpcInsecure,
+			scheme:      DefaultScheme,
+			interceptor: DefaultInterceptor,
 			retryOption: &retry.RetryOption{
 				Retry: retry.DefaultRetryCount,
+				Codes: DefaultRetriableCodes,
+				Backoff: &retry.Backoff{
+					Strategy: retry.Linear,
+				},
 			},
 		},
 		PipelineDoneChan: make(chan interface{}),
@@ -92,30 +99,30 @@ func (c *ConnPool) ClientConn() (*grpc.ClientConn, error) {
 		if c.Options.insecure {
 			opts = append(opts, grpc.WithInsecure())
 		} else {
-			//opts = append(opts, grpc.WithTransportCredentials(c.Options.credentials))
+			opts = append(opts, grpc.WithTransportCredentials(c.Options.credentials))
 		}
 
-		// if c.Options.interceptor == UnaryClient {
-		// 	fmt.Println("UnaryClient ....")
-		// 	opts = append(opts, grpc.WithUnaryInterceptor(UnaryClientInterceptor(c.Options.retryOption)))
-		// }
+		if c.Options.interceptor == UnaryClient {
+			fmt.Println("UnaryClient ....")
+			opts = append(opts, grpc.WithUnaryInterceptor(interceptor.UnaryClientInterceptor(c.Options.retryOption)))
+		}
+		address = c.Options.scheme + ":///" + address
 
-		c.Log.Infoln("Dial GRPC Server ....", c.Options.address)
+		c.Log.Infoln("Dial GRPC Server ....", address)
 
-		conn, err := grpc.Dial(c.Options.address, opts...)
+		conn, err := grpc.Dial(address, opts...)
 		if err != nil {
 			c.Log.Fatal(err)
 			return nil, err
 		}
 		c.Conn = conn
-		//defer conn.Close()
 		client := pb.NewPingServiceClient(c.Conn)
 
-		c.Log.Infoln("GRPC Client connected at - address : ", c.Options.address, " : ConnState = ", c.Conn.GetState())
+		c.Log.Infoln("GRPC Client connected at - address : ", address, " : ConnState = ", c.Conn.GetState())
 
 		respMsg, err := pb.SendPingMsg(client)
 		if err != nil {
-			return nil, fmt.Errorf(" failed connect with address - %s err - %v", c.Options.address, err)
+			return nil, err
 		}
 		c.Log.Infoln("GRPC Pong msg - ", respMsg)
 
@@ -248,17 +255,13 @@ func (c *ConnPool) GetConnIndex() uint64 {
 }
 
 func (c *ConnPool) IncreaseConnIndex() {
-	c.Log.Infoln("EnqueItem -- IncreaseConnIndex : ", c.GetConnIndex())
 	atomic.AddUint64(&ConnIndex, 1)
 }
 
 func (c *ConnPool) EnqueConnBatch(connItems batch.BatchItems) {
 	c.ConnBatchQueue.Enqueue(connItems)
-
 	i := c.ConnBatchQueue.GetEnqueIndex()
 	c.ConnSelect[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(c.ConnBatchQueue.GetEnqueCh(i))}
-
-	c.Log.Infoln("Select Created Index --- ", i)
 }
 
 func (c *ConnPool) GetConnBatch() batch.BatchItems {
@@ -281,11 +284,10 @@ func (c *ConnPool) GetConnBatch() batch.BatchItems {
 			c.Log.Infoln("SelectCase", "Batch Conn : chosen = ", chosen, " : channel = ", c.ConnSelect[chosen], " : received = ", rcv)
 			poolSize := c.GetConnPoolSize() - 1
 			atomic.StoreUint64(&ConnPoolPipeline, poolSize)
-
+			c.ConnSelect = append(c.ConnSelect[:chosen], c.ConnSelect[chosen+1:]...)
 			return rcv.Interface().(batch.BatchItems)
 		}
 	}
-
 }
 
 func (c *ConnPool) GetConnPoolSize() uint64 {

@@ -23,7 +23,7 @@ var (
 	DefaultConnectionType        = Client
 	DefaultInsecureState         = true
 	DefaultScheme                = "dns"
-	DefaultPort                  = "9000"
+	DefaultPort                  = "50051"
 	DefaultPoolSize       uint64 = 60
 
 	RetriableCodes = []codes.Code{codes.ResourceExhausted, codes.Unavailable}
@@ -43,7 +43,6 @@ const (
 type GRPC struct {
 	connectionType ConnectionType
 	server         *grpc.Server
-	client         *grpc.ClientConn
 	pool           *pool.ConnPool
 	serverPort     string
 	serverOptions  []grpc.ServerOption
@@ -54,7 +53,7 @@ func NewGRPCConnection(opts ...Options) (*GRPC, error) {
 
 	grpcConn := &GRPC{
 		connectionType: DefaultConnectionType,
-		pool:           pool.NewConnPool(pool.WithAddress("localhost:9000")),
+		pool:           pool.NewConnPool(pool.WithAddress("localhost:50051")),
 		log:            grpclog.NewLoggerV2(os.Stdout, ioutil.Discard, ioutil.Discard),
 	}
 
@@ -117,22 +116,4 @@ func (g *GRPC) GetConn() (*grpc.ClientConn, error) {
 		time.Sleep(1 * time.Second)
 	}
 	return nil, nil
-}
-
-func (g *GRPC) GetGrpcConnectivityState(state ConnState) string {
-
-	switch state {
-	case Idle:
-		return "IDLE"
-	case Connecting:
-		return "CONNECTING"
-	case Ready:
-		return "READY"
-	case TransientFailure:
-		return "TRANSIENT_FAILURE"
-	case ShutDown:
-		return "SHUTDOWN"
-	default:
-		return "Invalid-State"
-	}
 }

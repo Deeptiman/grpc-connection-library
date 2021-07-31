@@ -14,7 +14,7 @@ import (
 type RetryOption struct {
 	Retry   int
 	Address string
-	Backoff Backoff
+	Backoff *Backoff
 	Codes   []codes.Code
 }
 
@@ -51,19 +51,22 @@ func RetryClientConnection(factory ClientConnFactory, retryOption *RetryOption) 
 		conn, err = factory(retryOption.Address)
 		if err != nil {
 
-			if !isRetriable(err, retryOption.Codes) {
+			log.Infoln("grpc:connect:err:", " - Msg = ", err.Error())
+
+			if !IsRetriable(err, retryOption.Codes) {
+				log.Infoln("grpc:connect:err:", " - Not Retriable = ", err.Error())
 				return nil, err
 			}
 
-			if err := retryOption.retryBackoff(i); err != nil {
+			if err := retryOption.RetryBackoff(i); err != nil {
 				return nil, err
 			}
 
 			continue
 		}
-
+		
 		if conn != nil && failedConnState(conn.GetState()) {
-			if err := retryOption.retryBackoff(i); err != nil {
+			if err := retryOption.RetryBackoff(i); err != nil {
 				return nil, err
 			}
 			continue
@@ -76,7 +79,7 @@ func RetryClientConnection(factory ClientConnFactory, retryOption *RetryOption) 
 	return conn, err
 }
 
-func isRetriable(err error, codes []codes.Code) bool {
+func IsRetriable(err error, codes []codes.Code) bool {
 	errCode := status.Code(err)
 	for _, code := range codes {
 		if code == errCode {
@@ -86,18 +89,19 @@ func isRetriable(err error, codes []codes.Code) bool {
 	return false
 }
 
-func isContextError(err error) bool {
+func IsContextError(err error) bool {
 	code := status.Code(err)
 	return code == codes.DeadlineExceeded || code == codes.Canceled
 }
 
 func failedConnState(state connectivity.State) bool {
 
-	return state == connectivity.TransientFailure ||
+	return state == connectivity.Idle ||
+		state == connectivity.TransientFailure ||
 		state == connectivity.Shutdown
 }
 
-func (r *RetryOption) retryBackoff(attempt int) error {
+func (r *RetryOption) RetryBackoff(attempt int) error {
 
 	log.Infoln("grpc:connect:error - retry=", attempt)
 

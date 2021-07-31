@@ -10,7 +10,7 @@ type BackoffStrategy int
 
 var (
 	DefaultBackoff   = 2
-	LinearBackoff    = DefaultBackoff
+	LinearBackoff    = 1
 	ExponetialFactor = 1.5
 )
 
@@ -22,7 +22,7 @@ const (
 )
 
 type Backoff struct {
-	strategy BackoffStrategy
+	Strategy BackoffStrategy
 }
 
 func getExponentialBackoff(retry int) float64 {
@@ -33,18 +33,18 @@ func (b *Backoff) ApplyBackoffDuration(retry int) {
 
 	var backoffDuration int64
 
-	switch b.strategy {
+	switch b.Strategy {
 	case Jitter:
 		v := getExponentialBackoff(retry)
 		backoffDuration = int64(v/2 + float64(rand.Intn(int(v/2))))
 	case Linear:
-		LinearBackoff++
+		LinearBackoff = retry + 1
 		backoffDuration = int64(LinearBackoff)
 	case Exponetial:
 		backoffDuration = int64(getExponentialBackoff(retry))
 	default:
 		backoffDuration = int64(DefaultBackoff)
 	}
-
+	log.Warningln("grpc:retry:backoff:", backoffDuration, " sec")
 	time.Sleep(time.Duration(backoffDuration) * time.Second)
 }

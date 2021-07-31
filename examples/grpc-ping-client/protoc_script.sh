@@ -1,0 +1,1 @@
+protoc -I C:/Users/asusd/go/pkg/mod/protobuf/src --proto_path msg --go_out=plugins=grpc:msg message.proto

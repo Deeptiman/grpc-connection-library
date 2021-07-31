@@ -1,20 +1,13 @@
-package main
+package interceptor
 
 import (
 	"context"
 	"fmt"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"grpc-connection-library/retry"
 )
 
-type RetryOption struct {
-	retry   int
-	backoff *retry.Backoff
-	codes   []codes.Code
-}
-
-func UnaryClientInterceptor(retryOpts RetryOption) grpc.UnaryClientInterceptor {
+func UnaryClientInterceptor(retryOpts *retry.RetryOption) grpc.UnaryClientInterceptor {
 
 	fmt.Println("Unary Client Interceptor --- ")
 
@@ -23,16 +16,31 @@ func UnaryClientInterceptor(retryOpts RetryOption) grpc.UnaryClientInterceptor {
 		fmt.Println("Unary Client Interceptor Function Call --- ")
 
 		var err error
-		for attempt := 1; attempt <= retryOpts.retry; attempt++ {
+		for attempt := 1; attempt <= retryOpts.Retry; attempt++ {
+
+			if err := retryOpts.RetryBackoff(attempt); err != nil {
+				return err
+			}
 
 			err = invoker(parentCtx, method, req, reply, cc, opts...)
+			fmt.Println("Unary Client Interceptor")
 			if err == nil {
 				return nil
 			}
 
-			fmt.Println("grpc-retry : attempt = ", attempt)
+			if retry.IsContextError(err) {
+				if parentCtx.Err() != nil {
+					return err
+				}
+			}
 
-			retryOpts.backoff.ApplyBackoffDuration(attempt)
+			if !retry.IsRetriable(err, retryOpts.Codes) {
+				return err
+			}
+
+			fmt.Println("grpc-retry : attempt = ", attempt, " -- err = ", err.Error())
+
+			retryOpts.Backoff.ApplyBackoffDuration(attempt)
 		}
 
 		return err
