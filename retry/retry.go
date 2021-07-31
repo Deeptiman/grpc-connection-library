@@ -64,7 +64,7 @@ func RetryClientConnection(factory ClientConnFactory, retryOption *RetryOption) 
 
 			continue
 		}
-		
+
 		if conn != nil && failedConnState(conn.GetState()) {
 			if err := retryOption.RetryBackoff(i); err != nil {
 				return nil, err

@@ -2,34 +2,18 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"net"
-	"google.golang.org/grpc"
-	pb "grpc-ping-server/ping"
+	grpc "grpc-connection-library/grpc"
 )
 
-type PingMsgService struct {
-	pb.UnimplementedPingServiceServer
-}
-
-var conn *grpc.ClientConn
 func main() {
 	fmt.Println("GRPC Ping Server Example!")
 
 	port := "50051"
 
-	listener, err := net.Listen("tcp", ":"+port)
+	server, err := grpc.NewGRPCConnection(grpc.WithPort(port), grpc.WithConnectionType(grpc.Server))
 	if err != nil {
-		log.Fatalf("net.Listen: %v", err)
+		fmt.Println("Failed to create GRPC Connection - ", err.Error())
+		return
 	}
-	
-	fmt.Println("GRPC Server listening at - ", port)
-
-	grpcServer := grpc.NewServer()
-	pb.RegisterPingServiceServer(grpcServer, &pb.PingService{})
-	if err = grpcServer.Serve(listener); err != nil {
-		log.Fatal(err)
-	}
-	
-	fmt.Println("GRPC RegisterPingServiceServer .... ")
+	server.ListenAndServe()
 }

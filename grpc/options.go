@@ -1,4 +1,4 @@
-package main
+package grpc
 
 import (
 	"google.golang.org/grpc"
@@ -9,6 +9,12 @@ type Options func(*GRPC)
 func WithConnectionType(connectionType ConnectionType) Options {
 	return func(g *GRPC) {
 		g.connectionType = connectionType
+	}
+}
+
+func WithAddress(address string) Options {
+	return func(g *GRPC) {
+		g.serverAddress = address
 	}
 }
 

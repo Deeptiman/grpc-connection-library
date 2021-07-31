@@ -1,4 +1,4 @@
-package main
+package grpc
 
 import (
 	"fmt"
@@ -44,6 +44,7 @@ type GRPC struct {
 	connectionType ConnectionType
 	server         *grpc.Server
 	pool           *pool.ConnPool
+	serverAddress  string
 	serverPort     string
 	serverOptions  []grpc.ServerOption
 	log            grpclog.LoggerV2
@@ -52,8 +53,7 @@ type GRPC struct {
 func NewGRPCConnection(opts ...Options) (*GRPC, error) {
 
 	grpcConn := &GRPC{
-		connectionType: DefaultConnectionType,
-		pool:           pool.NewConnPool(pool.WithAddress("localhost:50051")),
+		connectionType: DefaultConnectionType,		
 		log:            grpclog.NewLoggerV2(os.Stdout, ioutil.Discard, ioutil.Discard),
 	}
 
@@ -63,19 +63,9 @@ func NewGRPCConnection(opts ...Options) (*GRPC, error) {
 		opt(grpcConn)
 	}
 
+	grpcConn.pool = pool.NewConnPool(pool.WithAddress(grpcConn.serverAddress))
+
 	fmt.Println("NewGRPCConnection ! ConnectionType : ", grpcConn.connectionType)
-
-	switch grpcConn.connectionType {
-	case Server:
-		fmt.Println("Connecting to GRPC Server....")
-		return grpcConn, grpcConn.ListenAndServe()
-	case Client:
-		fmt.Println("Connecting to GRPC Client....")
-
-		grpcConn.GetConn()
-
-		return grpcConn, nil
-	}
 
 	return grpcConn, nil
 }
