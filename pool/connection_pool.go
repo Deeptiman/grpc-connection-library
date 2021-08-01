@@ -2,7 +2,6 @@ package pool
 
 import (
 	"container/list"
-	"fmt"
 	interceptor "grpc-connection-library/interceptor"
 	pb "grpc-connection-library/ping"
 	retry "grpc-connection-library/retry"
@@ -103,7 +102,6 @@ func (c *ConnPool) ClientConn() (*grpc.ClientConn, error) {
 		}
 
 		if c.Options.interceptor == UnaryClient {
-			fmt.Println("UnaryClient ....")
 			opts = append(opts, grpc.WithUnaryInterceptor(interceptor.UnaryClientInterceptor(c.Options.retryOption)))
 		}
 		address = c.Options.scheme + ":///" + address
@@ -281,7 +279,7 @@ func (c *ConnPool) GetConnBatch() batch.BatchItems {
 				c.Log.Infoln("Conn Batch Instance Not Chosen = ", chosen)
 				continue
 			}
-			c.Log.Infoln("SelectCase", "Batch Conn : chosen = ", chosen, " : channel = ", c.ConnSelect[chosen], " : received = ", rcv)
+			c.Log.Infoln("SelectCase", "Batch Conn : chosen = ", chosen, " : conn state = ", rcv.Interface().(batch.BatchItems).Item.(*grpc.ClientConn).GetState())
 			poolSize := c.GetConnPoolSize() - 1
 			atomic.StoreUint64(&ConnPoolPipeline, poolSize)
 			c.ConnSelect = append(c.ConnSelect[:chosen], c.ConnSelect[chosen+1:]...)

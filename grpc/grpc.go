@@ -65,7 +65,7 @@ func NewGRPCConnection(opts ...Options) (*GRPC, error) {
 
 	grpcConn.pool = pool.NewConnPool(pool.WithAddress(grpcConn.serverAddress))
 
-	fmt.Println("NewGRPCConnection ! ConnectionType : ", grpcConn.connectionType)
+	grpcConn.log.Infoln("NewGRPCConnection ! ConnectionType : ", grpcConn.connectionType)
 
 	return grpcConn, nil
 }
@@ -77,13 +77,13 @@ func (g *GRPC) ListenAndServe() error {
 	if err != nil {
 		g.log.Fatalf("GRPC Server listen failed - %v", err)
 	}
-	fmt.Println("Server Port - ", port)
+	g.log.Infoln("Server Port - ", port)
 	serverOptions := g.serverOptions
 
 	grpcServer := grpc.NewServer(serverOptions...)
 	pb.RegisterPingServiceServer(grpcServer, &pb.PingService{})
 	if err = grpcServer.Serve(listener); err != nil {
-		fmt.Println("failed start server - %v", err)
+		g.log.Errorln("failed start server - %v", err)
 		g.log.Fatal(err)
 		return err
 	}
@@ -92,7 +92,7 @@ func (g *GRPC) ListenAndServe() error {
 	return nil
 }
 
-func (g *GRPC) GetConn() (*grpc.ClientConn, error) {
+func (g *GRPC) TestGetConn() (*grpc.ClientConn, error) {
 
 	// Testing conn
 	connTry := g.pool.MaxPoolSize
@@ -101,9 +101,23 @@ func (g *GRPC) GetConn() (*grpc.ClientConn, error) {
 		if batchItem.Item == nil {
 			return nil, fmt.Errorf("No Grpc connection instance found")
 		}
-		fmt.Println("ConnTry=", connTry, " : GRPC Conn -- ", batchItem.Item.(*grpc.ClientConn).GetState().String())
+		g.log.Infoln("ConnTry=", connTry, " : GRPC Conn -- ", batchItem.Item.(*grpc.ClientConn).GetState().String())
 		connTry--
 		time.Sleep(1 * time.Second)
 	}
 	return nil, nil
+}
+
+func (g *GRPC) GetConn() (*grpc.ClientConn, error) {
+
+	batchItem := g.pool.GetConnBatch()
+	if batchItem.Item == nil {
+		return nil, fmt.Errorf("No Grpc connection instance found")
+	}
+
+	conn := batchItem.Item.(*grpc.ClientConn)
+
+	g.log.Infoln("GRPC Conn State= ", conn.GetState().String())
+
+	return conn, nil
 }

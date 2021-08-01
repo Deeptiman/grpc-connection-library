@@ -60,3 +60,9 @@ func WithCodes(codes []codes.Code) PoolOptions {
 		c.Options.retryOption.Codes = codes
 	}
 }
+
+func WithCredentials(credentials credentials.TransportCredentials) PoolOptions {
+	return func(c *ConnPool) {
+		c.Options.credentials = credentials
+	}
+}
