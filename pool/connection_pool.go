@@ -1,14 +1,12 @@
 package pool
 
 import (
-	"container/list"
 	interceptor "grpc-connection-library/interceptor"
 	pb "grpc-connection-library/ping"
 	retry "grpc-connection-library/retry"
 	"io/ioutil"
 	"os"
 	"reflect"
-	"sync"
 	"sync/atomic"
 
 	batch "github.com/Deeptiman/go-batch"
@@ -17,16 +15,32 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
+// ConnPool struct defines several fields to construct a connection pool. The gRPC connection instance replicated
+// using batch processing and queried using reflect.SelectCase that gets the connection object
+// from the list of cases as a pseudo-random choice.
+//
+//  Conn: The base gRPC connection that keeps the initial client connection instance.
+//
+//  MaxPoolSize: The maximum number of connections created concurrently in the connection pool.
+//
+//  ConnInstanceBatch: The batch processing will help creates multiple replicas of base gRPC connection instances concurrently.
+//  https://github.com/Deeptiman/go-batch library used to perform the batch processing.
+//
+//
+//  Options: The options will keep the connection pool configurations to create gRPC dialoptions for base connection instances.
+//
+//  PipelineDoneChan: The connection pool runs a concurrency pipeline, so the "PipelineDoneChan" channel will be called after
+//  all the stages of the pipeline finishes.
+//
+//  Log: The gRPC log will show the internal connection lifecycle that will be useful to debug the connection flow.
 type ConnPool struct {
-	Conn                 *grpc.ClientConn
-	MaxPoolSize          uint64
-	ConnInstanceReplicas *list.List
-	ConnInstanceBatch    *batch.Batch
-	ConnBatchQueue       *Queue
-	Options              *PoolConnOptions
-	PipelineDoneChan     chan interface{}
-	Lock                 sync.Mutex
-	Log                  grpclog.LoggerV2
+	Conn              *grpc.ClientConn
+	MaxPoolSize       uint64
+	ConnInstanceBatch *batch.Batch
+	ConnBatchQueue    *Queue
+	Options           *PoolConnOptions
+	PipelineDoneChan  chan interface{}
+	Log               grpclog.LoggerV2
 }
 
 type ConnectionInterceptor int
@@ -37,12 +51,12 @@ const (
 )
 
 var (
-	DefaultConnBatch      uint64                = 20
-	DefaultMaxPoolSize    uint64                = 60
-	DefaultScheme         string                = "dns"
-	DefaultGrpcInsecure   bool                  = true
-	DefaultInterceptor    ConnectionInterceptor = UnaryClient
-	DefaultRetriableCodes                       = []codes.Code{codes.Aborted, codes.Unknown, codes.ResourceExhausted, codes.Unavailable}
+	DefaultConnBatch      uint64                = 20                                                                                     // maximum number of connection instances stored for a single batch
+	DefaultMaxPoolSize    uint64                = 60                                                                                     // The total size of the connection pool to store the gRPC connection instances
+	DefaultScheme         string                = "dns"                                                                                  // gRPC connection scheme to override the default scheme "passthrough" to "dns"
+	DefaultGrpcInsecure   bool                  = true                                                                                   // the authentication [enable/disable] bool flag
+	DefaultInterceptor    ConnectionInterceptor = UnaryClient                                                                            // This gRPC connection library currently only supports one type of interceptors to send msg to the server that doesn't expect a response
+	DefaultRetriableCodes                       = []codes.Code{codes.Aborted, codes.Unknown, codes.ResourceExhausted, codes.Unavailable} // possible retriable gRPC connection failure codes
 
 	ConnIndex         uint64 = 0
 	ConnPoolPipeline  uint64 = 0
@@ -50,13 +64,12 @@ var (
 	IsConnRecreate    bool   = false
 )
 
-type BatchPipelineFn func(batchItems interface{}) batch.BatchItems
-
+// NewConnPool will create the connection pool object that will instantiate the configurations for connection batch,
+// retryOptions, interceptor.
 func NewConnPool(opts ...PoolOptions) *ConnPool {
 
 	connPool := &ConnPool{
-		MaxPoolSize:          DefaultMaxPoolSize,
-		ConnInstanceReplicas: list.New(),
+		MaxPoolSize: DefaultMaxPoolSize,
 		Options: &PoolConnOptions{
 			insecure:    DefaultGrpcInsecure,
 			scheme:      DefaultScheme,
@@ -71,7 +84,6 @@ func NewConnPool(opts ...PoolOptions) *ConnPool {
 			},
 		},
 		PipelineDoneChan: make(chan interface{}),
-		Lock:             sync.Mutex{},
 		Log:              grpclog.NewLoggerV2(os.Stdout, ioutil.Discard, ioutil.Discard),
 	}
 
@@ -85,6 +97,8 @@ func NewConnPool(opts ...PoolOptions) *ConnPool {
 	return connPool
 }
 
+// ClientConn will create the initial gRPC client connection instance. The connection factory works as a higher
+// order function for gRPC retry policy in case of connection failure retries.
 func (c *ConnPool) ClientConn() (*grpc.ClientConn, error) {
 
 	connectionFactory := func(address string) (*grpc.ClientConn, error) {
@@ -101,8 +115,10 @@ func (c *ConnPool) ClientConn() (*grpc.ClientConn, error) {
 		}
 
 		if c.Options.interceptor == UnaryClient {
+			// WithUnaryInterceptor DialOption parameter will set the UnaryClient option type for the interceptor RPC calls
 			opts = append(opts, grpc.WithUnaryInterceptor(interceptor.UnaryClientInterceptor(c.Options.retryOption)))
 		}
+
 		address = c.Options.scheme + ":///" + address
 
 		c.Log.Infoln("Dial GRPC Server ....", address)
@@ -113,10 +129,13 @@ func (c *ConnPool) ClientConn() (*grpc.ClientConn, error) {
 			return nil, err
 		}
 		c.Conn = conn
+
+		// gRPC connection instance creates Ping service to test connection health.
 		client := pb.NewPingServiceClient(c.Conn)
 
 		c.Log.Infoln("GRPC Client connected at - address : ", address, " : ConnState = ", c.Conn.GetState())
 
+		// The SendPingMsg sends a test msg to the target server address to get the Pong response msg back to verify the connection flow.
 		respMsg, err := pb.SendPingMsg(client)
 		if err != nil {
 			return nil, err
@@ -129,10 +148,29 @@ func (c *ConnPool) ClientConn() (*grpc.ClientConn, error) {
 	return retry.RetryClientConnection(connectionFactory, c.Options.retryOption)
 }
 
+// ConnectionPoolPipeline follows the concurrency pipeline technique to create a connection pool in a higher
+// concurrent scenarios. The pipeline has several stages that use the Fan-In, Fan-Out technique to process the
+// data pipeline using channels.
+//
+// The entire process of creating the connection pool becomes a powerful function using the pipeline technique.
+// There are four different stages in this pipeline that works as a generator pattern to create a connection pool.
+//
+//  1#connInstancefn: This stage will create the initial gRPC connection instance that gets passed to the next pipeline stage for replication.
+//
+//
+//  2#connReplicasfn: The cloning process of the initial gRPC connection object will begin here. The connection instance gets passed to the next stage iteratively via channels.
+//
+//
+//  3#connBatchfn: This stage will start the batch processing using the
+//  github.com/Deeptiman/go-batch library. The MaxPoolSize is divided into multiple batches and released via a supply channel from go-batch library internal implementation.
+//
+//
+//  4#connEnqueuefn:   The connection queue reads through the go-batch client supply channel and stores the connection instances as channel case in []reflect.SelectCase.
+//  So, whenever the client requests a connection instance, reflect.SelectCase retrieves the conn instances from the case using the pseudo-random technique.
 func (c *ConnPool) ConnectionPoolPipeline(conn *grpc.ClientConn, pipelineDoneChan chan interface{}) {
 
 	// 1
-	connInstance := func(done chan interface{}) <-chan *grpc.ClientConn {
+	connInstancefn := func(done chan interface{}) <-chan *grpc.ClientConn {
 
 		connCh := make(chan *grpc.ClientConn)
 
@@ -153,7 +191,7 @@ func (c *ConnPool) ConnectionPoolPipeline(conn *grpc.ClientConn, pipelineDoneCha
 	}
 
 	// 2
-	connReplicas := func(connInstanceCh <-chan *grpc.ClientConn) <-chan *grpc.ClientConn {
+	connReplicasfn := func(connInstanceCh <-chan *grpc.ClientConn) <-chan *grpc.ClientConn {
 		connInstanceReplicaCh := make(chan *grpc.ClientConn)
 		go func() {
 			c.Log.Infoln("2#connReplicas ...")
@@ -170,7 +208,7 @@ func (c *ConnPool) ConnectionPoolPipeline(conn *grpc.ClientConn, pipelineDoneCha
 	}
 
 	// 3
-	connBatch := func(connInstanceCh <-chan *grpc.ClientConn) chan []batch.BatchItems {
+	connBatchfn := func(connInstanceCh <-chan *grpc.ClientConn) chan []batch.BatchItems {
 
 		go func() {
 			c.Log.Infoln("3#connBatch ...")
@@ -185,7 +223,7 @@ func (c *ConnPool) ConnectionPoolPipeline(conn *grpc.ClientConn, pipelineDoneCha
 	}
 
 	// 4
-	connEnqueue := func(connSupplyCh <-chan []batch.BatchItems) <-chan batch.BatchItems {
+	connEnqueuefn := func(connSupplyCh <-chan []batch.BatchItems) <-chan batch.BatchItems {
 		receiveBatchCh := make(chan batch.BatchItems)
 		go func() {
 			c.Log.Infoln("4#connEnqueue ...")
@@ -227,8 +265,8 @@ func (c *ConnPool) ConnectionPoolPipeline(conn *grpc.ClientConn, pipelineDoneCha
 	}
 	done := make(chan interface{})
 
-	// Pipeline
-	for s := range connEnqueue(connBatch(connReplicas(connInstance(done)))) {
+	// Concurrency Pipeline
+	for s := range connEnqueuefn(connBatchfn(connReplicasfn(connInstancefn(done)))) {
 		go func(s batch.BatchItems) {
 
 			atomic.AddUint64(&ConnPoolPipeline, 1)
@@ -247,18 +285,12 @@ func (c *ConnPool) ConnectionPoolPipeline(conn *grpc.ClientConn, pipelineDoneCha
 	}
 }
 
-func (c *ConnPool) GetConnIndex() uint64 {
-	return atomic.LoadUint64(&ConnIndex)
-}
-
-func (c *ConnPool) IncreaseConnIndex() {
-	atomic.AddUint64(&ConnIndex, 1)
-}
-
+// EnqueConnBatch will enqueue the batchItems received from the go-batch supply channel.
 func (c *ConnPool) EnqueConnBatch(connItems batch.BatchItems) {
 	c.ConnBatchQueue.Enqueue(connItems)
 }
 
+// GetConnBatch will retrieve the batch item from the connection queue that dequeues the items using the pseudo-random technique.
 func (c *ConnPool) GetConnBatch() batch.BatchItems {
 
 	batchItemCh := make(chan batch.BatchItems)
@@ -274,6 +306,7 @@ func (c *ConnPool) GetConnBatch() batch.BatchItems {
 	}
 }
 
+// The number of connections created by the connection pool
 func (c *ConnPool) GetConnPoolSize() uint64 {
 	return atomic.LoadUint64(&ConnPoolPipeline)
 }
