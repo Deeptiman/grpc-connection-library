@@ -1,9 +1,9 @@
 package pool
 
 import (
+	"github.com/Deeptiman/grpc-connection-library/retry"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
-	"grpc-connection-library/retry"
 )
 
 type PoolConnOptions struct {

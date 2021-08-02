@@ -27,7 +27,7 @@ type RetryOption struct {
 	Codes   []codes.Code
 }
 
-// Connectivity State of gRPC connection [Idle,Connecting,Ready,TransientFailure,Shutdown]
+// ConnState : Connectivity State of gRPC connection [Idle,Connecting,Ready,TransientFailure,Shutdown]
 type ConnState connectivity.State
 
 const (
@@ -39,7 +39,10 @@ const (
 )
 
 var (
-	ErrRetryMaxLimit      = errors.New("Retry Limit Exceed!") // ErrMsg after max retry failure
+	// ErrRetryMaxLimit : ErrMsg after max retry failure
+	ErrRetryMaxLimit = errors.New("Retry Limit Exceed!")
+
+	// DefaultRetryCount : the number of retry attempts
 	DefaultRetryCount int = 5
 	log                   = grpclog.NewLoggerV2(os.Stdout, ioutil.Discard, ioutil.Discard)
 )

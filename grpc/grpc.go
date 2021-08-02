@@ -2,15 +2,14 @@ package grpc
 
 import (
 	"fmt"
-	pb "grpc-connection-library/ping"
-	pool "grpc-connection-library/pool"
+	pb "github.com/Deeptiman/grpc-connection-library/ping"
+	pool "github.com/Deeptiman/grpc-connection-library/pool"
 	"io/ioutil"
 	"net"
 	"os"
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 )
@@ -18,16 +17,21 @@ import (
 // ConnectionType gRPC[client:server]
 type ConnectionType int
 
-// Connectivity State of gRPC connection [Idle,Connecting,Ready,TransientFailure,Shutdown]
+// ConnState : Connectivity State of gRPC connection [Idle,Connecting,Ready,TransientFailure,Shutdown]
 type ConnState connectivity.State
 
 var (
-	DefaultConnectionType        = Client // DefaultConnectionType [Client], library initiate the gRPC client connection
-	DefaultInsecureState         = true
-	DefaultServerPort            = "50051"
-	DefaultPoolSize       uint64 = 60
+	// DefaultConnectionType [Client], library initiate the gRPC client connection
+	DefaultConnectionType = Client
 
-	RetriableCodes = []codes.Code{codes.ResourceExhausted, codes.Unavailable}
+	// DefaultInsecureState : the authentication state of gRPC connection
+	DefaultInsecureState = true
+
+	// DefaultServerPort : the server port of gRPC connection
+	DefaultServerPort = "50051"
+
+	// DefaultPoolSize : the connection pool size to create gRPC connections
+	DefaultPoolSize uint64 = 60
 )
 
 const (

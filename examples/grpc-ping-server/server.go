@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	grpc "grpc-connection-library/grpc"
+	grpc "github.com/Deeptiman/grpc-connection-library/grpc"
 )
 
 func main() {

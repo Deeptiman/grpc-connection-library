@@ -2,8 +2,8 @@ package interceptor
 
 import (
 	"context"
+	"github.com/Deeptiman/grpc-connection-library/retry"
 	"google.golang.org/grpc"
-	"grpc-connection-library/retry"
 )
 
 func UnaryClientInterceptor(retryOpts *retry.RetryOption) grpc.UnaryClientInterceptor {

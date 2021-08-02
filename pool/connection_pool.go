@@ -1,15 +1,15 @@
 package pool
 
 import (
-	interceptor "grpc-connection-library/interceptor"
-	pb "grpc-connection-library/ping"
-	retry "grpc-connection-library/retry"
+	"github.com/Deeptiman/grpc-connection-library/interceptor"
+	pb "github.com/Deeptiman/grpc-connection-library/ping"
+	"github.com/Deeptiman/grpc-connection-library/retry"
 	"io/ioutil"
 	"os"
 	"reflect"
 	"sync/atomic"
 
-	batch "github.com/Deeptiman/go-batch"
+	"github.com/Deeptiman/go-batch"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
@@ -53,22 +53,22 @@ const (
 )
 
 var (
-	// maximum number of connection instances stored for a single batch
+	// DefaultConnBatch : maximum number of connection instances stored for a single batch
 	DefaultConnBatch uint64 = 20
 
-	// The total size of the connection pool to store the gRPC connection instances
+	// DefaultMaxPoolSize : the total size of the connection pool to store the gRPC connection instances
 	DefaultMaxPoolSize uint64 = 60
 
-	// gRPC connection scheme to override the default scheme "passthrough" to "dns"
+	// DefaultScheme : gRPC connection scheme to override the default scheme "passthrough" to "dns"
 	DefaultScheme string = "dns"
 
-	// the authentication [enable/disable] bool flag
+	// DefaultGrpcInsecure : the authentication [enable/disable] bool flag
 	DefaultGrpcInsecure bool = true
 
-	// This gRPC connection library currently only supports one type of interceptors to send msg to the server that doesn't expect a response
+	// DefaultInterceptor : the gRPC connection library currently only supports one type of interceptors to send msg to the server that doesn't expect a response
 	DefaultInterceptor ConnectionInterceptor = UnaryClient
 
-	// possible retriable gRPC connection failure codes
+	// DefaultRetriableCodes : possible retriable gRPC connection failure codes
 	DefaultRetriableCodes = []codes.Code{codes.Aborted, codes.Unknown, codes.ResourceExhausted, codes.Unavailable}
 
 	ConnIndex         uint64 = 0
@@ -319,7 +319,7 @@ func (c *ConnPool) GetConnBatch() batch.BatchItems {
 	}
 }
 
-// The number of connections created by the connection pool
+// GetConnPoolSize loads the number of connections created by the connection pool
 func (c *ConnPool) GetConnPoolSize() uint64 {
 	return atomic.LoadUint64(&ConnPoolPipeline)
 }

@@ -1,8 +1,8 @@
 package pool
 
 import (
-	batch "github.com/Deeptiman/go-batch"
-	log "grpc-connection-library/logger"
+	"github.com/Deeptiman/go-batch"
+	log "github.com/Deeptiman/grpc-connection-library/logger"
 	"reflect"
 )
 
