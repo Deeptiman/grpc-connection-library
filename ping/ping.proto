@@ -7,7 +7,7 @@ option go_package = ".;ping";
 import "google/protobuf/timestamp.proto";
 
 service PingService {
-    rpc SendPingMsg(Request) returns (Response) {}
+    rpc SendPongMsg(Request) returns (Response) {}
 }
 
 message Request {

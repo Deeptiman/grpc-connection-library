@@ -43,20 +43,33 @@ type ConnPool struct {
 	Log               grpclog.LoggerV2
 }
 
+// ConnectionInterceptor defines the interceptors[UnaryServer:UnaryClient] type for a gRPC connection.
 type ConnectionInterceptor int
 
 const (
+	// ConnectionInterceptor constants
 	UnaryServer ConnectionInterceptor = iota
 	UnaryClient
 )
 
 var (
-	DefaultConnBatch      uint64                = 20                                                                                     // maximum number of connection instances stored for a single batch
-	DefaultMaxPoolSize    uint64                = 60                                                                                     // The total size of the connection pool to store the gRPC connection instances
-	DefaultScheme         string                = "dns"                                                                                  // gRPC connection scheme to override the default scheme "passthrough" to "dns"
-	DefaultGrpcInsecure   bool                  = true                                                                                   // the authentication [enable/disable] bool flag
-	DefaultInterceptor    ConnectionInterceptor = UnaryClient                                                                            // This gRPC connection library currently only supports one type of interceptors to send msg to the server that doesn't expect a response
-	DefaultRetriableCodes                       = []codes.Code{codes.Aborted, codes.Unknown, codes.ResourceExhausted, codes.Unavailable} // possible retriable gRPC connection failure codes
+	// maximum number of connection instances stored for a single batch
+	DefaultConnBatch uint64 = 20
+
+	// The total size of the connection pool to store the gRPC connection instances
+	DefaultMaxPoolSize uint64 = 60
+
+	// gRPC connection scheme to override the default scheme "passthrough" to "dns"
+	DefaultScheme string = "dns"
+
+	// the authentication [enable/disable] bool flag
+	DefaultGrpcInsecure bool = true
+
+	// This gRPC connection library currently only supports one type of interceptors to send msg to the server that doesn't expect a response
+	DefaultInterceptor ConnectionInterceptor = UnaryClient
+
+	// possible retriable gRPC connection failure codes
+	DefaultRetriableCodes = []codes.Code{codes.Aborted, codes.Unknown, codes.ResourceExhausted, codes.Unavailable}
 
 	ConnIndex         uint64 = 0
 	ConnPoolPipeline  uint64 = 0

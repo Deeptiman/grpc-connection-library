@@ -8,10 +8,13 @@ import (
 	"time"
 )
 
+// PingService struct can work as Ping/Pong service between server and client to test the gRPC connection flow.
 type PingService struct {
+	// UnimplementedPingServiceServer can be embedded to have forward-compatible implementations
 	UnimplementedPingServiceServer
 }
 
+// SendPingMsg function used by the client to send a ping message to the server.
 func SendPingMsg(client PingServiceClient) (string, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
@@ -21,7 +24,7 @@ func SendPingMsg(client PingServiceClient) (string, error) {
 	var err error
 
 	fmt.Println("GRPC Client SendPingMsg -- ")
-	resp, err = client.SendPingMsg(ctx, &Request{
+	resp, err = client.SendPongMsg(ctx, &Request{
 		Message: "Testing Client-Server connection!",
 	})
 
@@ -35,8 +38,9 @@ func SendPingMsg(client PingServiceClient) (string, error) {
 	return resp.Pong.GetMessage(), nil
 }
 
-func (s *PingService) SendPingMsg(ctx context.Context, req *Request) (*Response, error) {
-	log.Print("sending ping response")
+// SendPongMsg function used by the server to send pong messages to the client.
+func (s *PingService) SendPongMsg(ctx context.Context, req *Request) (*Response, error) {
+	log.Print("sending pong response")
 
 	log.Println("GRPC Server Send...")
 

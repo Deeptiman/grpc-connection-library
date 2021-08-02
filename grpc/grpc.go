@@ -15,12 +15,14 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
+// ConnectionType gRPC[client:server]
 type ConnectionType int
 
+// Connectivity State of gRPC connection [Idle,Connecting,Ready,TransientFailure,Shutdown]
 type ConnState connectivity.State
 
 var (
-	DefaultConnectionType        = Client
+	DefaultConnectionType        = Client // DefaultConnectionType [Client], library initiate the gRPC client connection
 	DefaultInsecureState         = true
 	DefaultServerPort            = "50051"
 	DefaultPoolSize       uint64 = 60
