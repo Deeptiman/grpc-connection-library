@@ -169,7 +169,8 @@ func (c *ConnPool) ClientConn() (*grpc.ClientConn, error) {
 // There are four different stages in this pipeline that works as a generator pattern to create a connection pool.
 func (c *ConnPool) ConnectionPoolPipeline(conn *grpc.ClientConn, pipelineDoneChan chan interface{}) {
 
-	//  1#connInstancefn: This stage will create the initial gRPC connection instance that gets passed to the next pipeline stage for replication.
+	// 1#connInstancefn: This stage will create the initial gRPC connection instance that gets passed to the 
+	// next pipeline stage for replication.
 	connInstancefn := func(done chan interface{}) <-chan *grpc.ClientConn {
 
 		connCh := make(chan *grpc.ClientConn)
@@ -190,7 +191,7 @@ func (c *ConnPool) ConnectionPoolPipeline(conn *grpc.ClientConn, pipelineDoneCha
 		return connCh
 	}
 
-	//  2#connReplicasfn: The cloning process of the initial gRPC connection object will begin here. 
+	// 2#connReplicasfn: The cloning process of the initial gRPC connection object will begin here. 
 	// The connection instance gets passed to the next stage iteratively via channels.
 	connReplicasfn := func(connInstanceCh <-chan *grpc.ClientConn) <-chan *grpc.ClientConn {
 		connInstanceReplicaCh := make(chan *grpc.ClientConn)
@@ -208,8 +209,8 @@ func (c *ConnPool) ConnectionPoolPipeline(conn *grpc.ClientConn, pipelineDoneCha
 		return connInstanceReplicaCh
 	}
 
-	//  3#connBatchfn: This stage will start the batch processing using the github.com/Deeptiman/go-batch library. The MaxPoolSize is divided into multiple batches and 
-	// released via a supply channel from go-batch library internal implementation.
+	// 3#connBatchfn: This stage will start the batch processing using the github.com/Deeptiman/go-batch library. 
+	// The MaxPoolSize is divided into multiple batches and released via a supply channel from go-batch library internal implementation.
 	connBatchfn := func(connInstanceCh <-chan *grpc.ClientConn) chan []batch.BatchItems {
 
 		go func() {
@@ -224,8 +225,9 @@ func (c *ConnPool) ConnectionPoolPipeline(conn *grpc.ClientConn, pipelineDoneCha
 		return c.ConnInstanceBatch.Consumer.Supply.ClientSupplyCh
 	}
 
-	//  4#connEnqueuefn:   The connection queue reads through the go-batch client supply channel and stores the connection instances as channel case in []reflect.SelectCase.
-	//  So, whenever the client requests a connection instance, reflect.SelectCase retrieves the conn instances from the case using the pseudo-random technique.
+	// 4#connEnqueuefn:   The connection queue reads through the go-batch client supply channel and stores the connection 
+	// instances as channel case in []reflect.SelectCase. So, whenever the client requests a connection instance, reflect.SelectCase 
+	// retrieves the conn instances from the case using the pseudo-random technique.
 	connEnqueuefn := func(connSupplyCh <-chan []batch.BatchItems) <-chan batch.BatchItems {
 		receiveBatchCh := make(chan batch.BatchItems)
 		go func() {
