@@ -23,7 +23,6 @@ type ConnPool struct {
 	ConnInstanceReplicas *list.List
 	ConnInstanceBatch    *batch.Batch
 	ConnBatchQueue       *Queue
-	ConnSelect           []reflect.SelectCase
 	Options              *PoolConnOptions
 	PipelineDoneChan     chan interface{}
 	Lock                 sync.Mutex
@@ -58,13 +57,11 @@ func NewConnPool(opts ...PoolOptions) *ConnPool {
 	connPool := &ConnPool{
 		MaxPoolSize:          DefaultMaxPoolSize,
 		ConnInstanceReplicas: list.New(),
-		ConnInstanceBatch:    batch.NewBatch(batch.WithMaxItems(DefaultConnBatch)),
-		ConnBatchQueue:       NewQueue(DefaultMaxPoolSize),
-		ConnSelect:           make([]reflect.SelectCase, DefaultMaxPoolSize),
 		Options: &PoolConnOptions{
 			insecure:    DefaultGrpcInsecure,
 			scheme:      DefaultScheme,
 			interceptor: DefaultInterceptor,
+			connBatch:   DefaultConnBatch,
 			retryOption: &retry.RetryOption{
 				Retry: retry.DefaultRetryCount,
 				Codes: DefaultRetriableCodes,
@@ -82,6 +79,8 @@ func NewConnPool(opts ...PoolOptions) *ConnPool {
 		opt(connPool)
 	}
 	connPool.Options.retryOption.Address = connPool.Options.address
+	connPool.ConnInstanceBatch = batch.NewBatch(batch.WithMaxItems(connPool.Options.connBatch))
+	connPool.ConnBatchQueue = NewQueue(connPool.MaxPoolSize)
 
 	return connPool
 }
@@ -220,7 +219,7 @@ func (c *ConnPool) ConnectionPoolPipeline(conn *grpc.ClientConn, pipelineDoneCha
 	// Recreate connection pool
 	if IsConnRecreate {
 		c.Log.Infoln("Connection Recreate !!!")
-		c.ConnSelect = make([]reflect.SelectCase, c.MaxPoolSize)
+		c.ConnBatchQueue.itemSelect = make([]reflect.SelectCase, c.MaxPoolSize)
 		c.ConnBatchQueue.enqueCh = make([]chan batch.BatchItems, 0, c.MaxPoolSize)
 		c.PipelineDoneChan = make(chan interface{})
 		c.ConnInstanceBatch.Unlock()
@@ -258,8 +257,6 @@ func (c *ConnPool) IncreaseConnIndex() {
 
 func (c *ConnPool) EnqueConnBatch(connItems batch.BatchItems) {
 	c.ConnBatchQueue.Enqueue(connItems)
-	i := c.ConnBatchQueue.GetEnqueIndex()
-	c.ConnSelect[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(c.ConnBatchQueue.GetEnqueCh(i))}
 }
 
 func (c *ConnPool) GetConnBatch() batch.BatchItems {
@@ -271,29 +268,12 @@ func (c *ConnPool) GetConnBatch() batch.BatchItems {
 	select {
 	case <-c.PipelineDoneChan:
 		c.Log.Infoln("Pipeline Done Channel !")
-		defer c.recoverInvalidSelect()
-
-		for {
-			chosen, rcv, ok := reflect.Select(c.ConnSelect)
-			if !ok {
-				c.Log.Infoln("Conn Batch Instance Not Chosen = ", chosen)
-				continue
-			}
-			c.Log.Infoln("SelectCase", "Batch Conn : chosen = ", chosen, " : conn state = ", rcv.Interface().(batch.BatchItems).Item.(*grpc.ClientConn).GetState())
-			poolSize := c.GetConnPoolSize() - 1
-			atomic.StoreUint64(&ConnPoolPipeline, poolSize)
-			c.ConnSelect = append(c.ConnSelect[:chosen], c.ConnSelect[chosen+1:]...)
-			return rcv.Interface().(batch.BatchItems)
-		}
+		poolSize := c.GetConnPoolSize() - 1
+		atomic.StoreUint64(&ConnPoolPipeline, poolSize)
+		return c.ConnBatchQueue.Dequeue()
 	}
 }
 
 func (c *ConnPool) GetConnPoolSize() uint64 {
 	return atomic.LoadUint64(&ConnPoolPipeline)
-}
-
-func (c *ConnPool) recoverInvalidSelect() {
-	if r := recover(); r != nil {
-		c.Log.Infoln("Recovered", r)
-	}
 }

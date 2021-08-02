@@ -12,7 +12,7 @@ func main() {
 		fmt.Println("Failed to create GRPC Connection - ", err.Error())
 		return
 	}
-	client.GetConn()
+	client.TestGetConn()
 
 	fmt.Println("GRPC Client Connected .... ")
 }

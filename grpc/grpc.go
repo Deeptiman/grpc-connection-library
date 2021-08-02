@@ -42,10 +42,10 @@ const (
 type GRPC struct {
 	connectionType ConnectionType
 	server         *grpc.Server
-	pool           *pool.ConnPool
 	serverAddress  string
 	serverPort     string
 	serverOptions  []grpc.ServerOption
+	pool           *pool.ConnPool
 	log            grpclog.LoggerV2
 }
 
@@ -92,6 +92,20 @@ func (g *GRPC) ListenAndServe() error {
 	return nil
 }
 
+func (g *GRPC) GetConn() (*grpc.ClientConn, error) {
+
+	batchItem := g.pool.GetConnBatch()
+	if batchItem.Item == nil {
+		return nil, fmt.Errorf("No Grpc connection instance found")
+	}
+
+	conn := batchItem.Item.(*grpc.ClientConn)
+
+	g.log.Infoln("GRPC Conn State= ", conn.GetState().String())
+
+	return conn, nil
+}
+
 func (g *GRPC) TestGetConn() (*grpc.ClientConn, error) {
 
 	// Testing conn
@@ -106,18 +120,4 @@ func (g *GRPC) TestGetConn() (*grpc.ClientConn, error) {
 		time.Sleep(1 * time.Second)
 	}
 	return nil, nil
-}
-
-func (g *GRPC) GetConn() (*grpc.ClientConn, error) {
-
-	batchItem := g.pool.GetConnBatch()
-	if batchItem.Item == nil {
-		return nil, fmt.Errorf("No Grpc connection instance found")
-	}
-
-	conn := batchItem.Item.(*grpc.ClientConn)
-
-	g.log.Infoln("GRPC Conn State= ", conn.GetState().String())
-
-	return conn, nil
 }

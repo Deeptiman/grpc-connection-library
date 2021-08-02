@@ -15,6 +15,7 @@ type PoolConnOptions struct {
 	authority   string
 	insecure    bool
 	scheme      string
+	connBatch   uint64
 }
 
 type PoolOptions func(*ConnPool)
