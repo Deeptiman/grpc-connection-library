@@ -6,12 +6,18 @@ import (
 	"time"
 )
 
+// BackoffStrategy type
 type BackoffStrategy int
 
 var (
-	DefaultBackoff   = 2   // DefaultBackoff duration 2 secs
-	LinearBackoff    = 1   // LinearBackoff duration starts from 1 second
-	ExponetialFactor = 1.5 // ExponetialFactor 1.5 per retry attempts
+	// DefaultBackoff duration 2 secs
+	DefaultBackoff = 2
+
+	// LinearBackoff duration starts from 1 second
+	LinearBackoff = 1
+
+	// ExponetialFactor 1.5 per retry attempts
+	ExponetialFactor = 1.5
 )
 
 const (
