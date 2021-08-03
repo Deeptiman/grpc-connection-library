@@ -33,94 +33,94 @@ func NewLogger() *Logger {
 	}
 }
 
-// SetLogLevel
+// SetLogLevel Logger
 func (l *Logger) SetLogLevel(level LogLevel) {
 	if level == Debug {
 		l.log.Level = logrus.DebugLevel
 	}
 }
 
-// Debug
+// Debug Logger
 func (l *Logger) Debug(args ...interface{}) {
 	l.log.Debug(args...)
 }
 
-// Debugf
+// Debugf Logger
 func (l *Logger) Debugf(format string, args ...interface{}) {
 	l.log.Debugf(format, args...)
 }
 
-// Debugln
+// Debugln Logger
 func (l *Logger) Debugln(args ...interface{}) {
 	l.log.Debugln(args...)
 }
 
-// Info
+// Info Logger
 func (l *Logger) Info(args ...interface{}) {
 	l.log.Info(args...)
 }
 
-// Infof
+// Infof Logger
 func (l *Logger) Infof(format string, args ...interface{}) {
 	l.log.Infof(format, args...)
 }
 
-// Infoln
+// Infoln Logger
 func (l *Logger) Infoln(args ...interface{}) {
 	l.log.Infoln(args...)
 }
 
-// Warn
+// Warn Logger
 func (l *Logger) Warn(format string, args ...interface{}) {
 	l.log.Warn(args...)
 }
 
-// Warnf
+// Warnf Logger
 func (l *Logger) Warnf(format string, args ...interface{}) {
 	l.log.Warnf(format, args...)
 }
 
-// Warnln
+// Warnln Logger
 func (l *Logger) Warnln(format string, args ...interface{}) {
 	l.log.Warnln(args...)
 }
 
-// Fatal
+// Fatal Logger
 func (l *Logger) Fatal(format string, args ...interface{}) {
 	l.log.Fatal(args...)
 }
 
-// Fatalf
+// Fatalf Logger
 func (l *Logger) Fatalf(format string, args ...interface{}) {
 	l.log.Fatalf(format, args...)
 }
 
-// Fatalln
+// Fatalln Logger
 func (l *Logger) Fatalln(format string, args ...interface{}) {
 	l.log.Fatalln(args...)
 }
 
-// Error
+// Error Logger
 func (l *Logger) Error(format string, args ...interface{}) {
 	l.log.Error(args...)
 }
 
-// Errorf
+// Errorf Logger
 func (l *Logger) Errorf(format string, args ...interface{}) {
 	l.log.Errorf(format, args...)
 }
 
-// Errorln
+// Errorln Logger
 func (l *Logger) Errorln(format string, args ...interface{}) {
 	l.log.Errorln(args...)
 }
 
-// WithField
+// WithField Logger
 func (l *Logger) WithField(key string, value interface{}) {
 	l.log.WithField(key, value)
 }
 
-// WithFields
+// WithFields Logger
 func (l *Logger) WithFields(fields logrus.Fields) {
 	l.log.WithFields(fields)
 }
