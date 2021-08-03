@@ -318,6 +318,9 @@ for {
 	return rcv.Interface().(batch.BatchItems)
 }
 ````````````````````````````````````````````````
+## License
+
+This project is licensed under the <a href="https://github.com/Deeptiman/go-connection-library/blob/main/LICENSE">MIT License</a>
 
 ## References
 1. <a href="https://github.com/grpc-ecosystem/go-grpc-middleware">Go gRPC Middleware</a>
