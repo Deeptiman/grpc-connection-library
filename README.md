@@ -133,7 +133,7 @@ c.Log.Infoln("GRPC Pong msg - ", respMsg)
 `````````````````````````````````
 
 ## Concurrency Pipeline for gRPC Connection Pool
-1. <a href="https://github.com/Deeptiman/grpc-connection-library/blob/master/pool/connection_pool.go#L170">ConnectionPoolPipeline()</a> follows the concurrency pipeline technique to create a connection pool in a higher concurrent scenarios. The pipeline has several stages that use the <b>Fan-In, Fan-Out</b> technique to process the data pipeline using channels.
+1. <a href="https://github.com/Deeptiman/grpc-connection-library/blob/master/pool/connection_pool.go#L170">ConnPoolPipeline()</a> follows the concurrency pipeline technique to create a connection pool in a higher concurrent scenarios. The pipeline has several stages that use the <b>Fan-In, Fan-Out</b> technique to process the data pipeline using channels.
 2. The entire process of creating the connection pool becomes a powerful function using the pipeline technique. The four stages work as a generator pattern for the connection pool.
 
 ### Pipeline Stages
