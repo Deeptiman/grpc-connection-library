@@ -161,13 +161,13 @@ func (c *ConnPool) ClientConn() (*grpc.ClientConn, error) {
 	return retry.RetryClientConnection(connectionFactory, c.Options.retryOption)
 }
 
-// ConnectionPoolPipeline follows the concurrency pipeline technique to create a connection pool in a higher
+// ConnPoolPipeline follows the concurrency pipeline technique to create a connection pool in a higher
 // concurrent scenarios. The pipeline has several stages that use the Fan-In, Fan-Out technique to process the
 // data pipeline using channels.
 //
 // The entire process of creating the connection pool becomes a powerful function using the pipeline technique.
 // There are four different stages in this pipeline that works as a generator pattern to create a connection pool.
-func (c *ConnPool) ConnectionPoolPipeline(conn *grpc.ClientConn, pipelineDoneChan chan interface{}) {
+func (c *ConnPool) ConnPoolPipeline(conn *grpc.ClientConn, pipelineDoneChan chan interface{}) {
 
 	// 1#connInstancefn: This stage will create the initial gRPC connection instance that gets passed to the
 	// next pipeline stage for replication.
@@ -300,7 +300,7 @@ func (c *ConnPool) GetConnBatch() batch.BatchItems {
 
 	batchItemCh := make(chan batch.BatchItems)
 	defer close(batchItemCh)
-	go c.ConnectionPoolPipeline(c.Conn, c.PipelineDoneChan)
+	go c.ConnPoolPipeline(c.Conn, c.PipelineDoneChan)
 
 	select {
 	case <-c.PipelineDoneChan:
