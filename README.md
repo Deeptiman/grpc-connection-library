@@ -1,7 +1,7 @@
 # grpc-connection-library
 grpc-connection-library is a library that supports the gRPC client-server connection interface for the developers to use as a gRPC middleware in the application. The library is written in Golang with a concurrency pipeline design pattern to synchronize the gRPC connection pool system.
 
-# Features
+## Features
 - The gRPC connection flow among server/client synchronized using the Ping/Pong services.
 - gRPC connection library supports connection pool reuse the gRPC client connection instance.
 - Concurrency Pipeline design pattern synchronizes the data flow among several stages while creating the connection pool.
@@ -10,16 +10,16 @@ grpc-connection-library is a library that supports the gRPC client-server connec
 - The grpc-retry policy helps to retry the failure of gRPC connections with backoff strategy.
 - The <a href="https://pkg.go.dev/google.golang.org/grpc/grpclog">grpclog</a> will show the internal connection lifecycle that will be useful to debug the connection flow.
 
-# Installation
+## Installation
 
 `go get github.com/Deeptiman/go-connection-library`
 
-# Demo
+## Demo
 
 
-# Go Docs
+## Go Docs
 
-# Example 
+## Example 
 <b>Client</b>:
  
 ```````````````````````````````go
@@ -66,7 +66,7 @@ func main() {
 }
 ```````````````````````````````
 
-# gRPC connection Ping/Pong service
+## gRPC connection Ping/Pong service
 The library provides a Ping/Pong service facility to test the client/server connection flow. The service helps to establish connection health check status.
 
 <b>protos:</b>
@@ -130,12 +130,12 @@ if err != nil {
 c.Log.Infoln("GRPC Pong msg - ", respMsg)
 `````````````````````````````````
 
-# Concurrency Pipeline for gRPC Connection Pool
+## Concurrency Pipeline for gRPC Connection Pool
 1. <a href="https://github.com/Deeptiman/grpc-connection-library/blob/master/pool/connection_pool.go#L170">ConnectionPoolPipeline()</a> follows the concurrency pipeline technique to create a connection pool in a higher concurrent scenarios. The pipeline has several stages that use the <b>Fan-In, Fan-Out</b> technique to process the data pipeline using channels.
 2. The entire process of creating the connection pool becomes a powerful function using the pipeline technique. The four stages work as a generator pattern for the connection pool.
 
-## Pipeline Stages
-### Stage-1: 
+### Pipeline Stages
+#### Stage-1: 
 This stage will create the initial gRPC connection instance that gets passed to the next pipeline stage for replication.
 	
  `````````````````````````````````````````````````go
@@ -159,7 +159,7 @@ This stage will create the initial gRPC connection instance that gets passed to 
   return connCh 
 }
 `````````````````````````````````````````````````
-### Stage-2: 
+#### Stage-2: 
 The cloning process of the initial gRPC connection object will begin here. The connection instance gets passed to the next stage iteratively via channels.
 
 `````````````````````````````````````````````````go
@@ -179,7 +179,7 @@ connReplicasfn := func(connInstanceCh <-chan *grpc.ClientConn) <-chan *grpc.Clie
 	return connInstanceReplicaCh
 }
 `````````````````````````````````````````````````
-### Stage-3: 
+#### Stage-3: 
 This stage will start the batch processing using the <a href="https://github.com/Deeptiman/go-batch">github.com/Deeptiman/go-batch</a> library. The MaxPoolSize is divided into multiple batches and released via a supply channel from go-batch library internal implementation.
 
 `````````````````````````````````````````````````go
@@ -198,7 +198,7 @@ connBatchfn := func(connInstanceCh <-chan *grpc.ClientConn) chan []batch.BatchIt
 }
 
 `````````````````````````````````````````````````
-### Stage-4:
+#### Stage-4:
 The connection queue reads through the go-batch client supply channel and stores the connection instances as channel case in <b>[]reflect.SelectCase</b>. So, whenever the client requests a connection instance, <b>reflect.SelectCase</b> retrieves the conn instances from the case using the pseudo-random technique.
 
 `````````````````````````````````````````````````go
@@ -220,7 +220,7 @@ connEnqueuefn := func(connSupplyCh <-chan []batch.BatchItems) <-chan batch.Batch
 	return receiveBatchCh
 }
 `````````````````````````````````````````````````
-### Run the pipeline:
+#### Run the pipeline:
 `````````````````````````````````````````````````go
 for s := range connEnqueuefn(connBatchfn(connReplicasfn(connInstancefn(done)))) {
 	go func(s batch.BatchItems) {
@@ -235,7 +235,7 @@ for s := range connEnqueuefn(connBatchfn(connReplicasfn(connInstancefn(done)))) 
 }
 `````````````````````````````````````````````````
 
-# Batch Processing Item structure in the connection pool
+## Batch Processing Item structure in the connection pool
 
 `````````````````````````````````````````````````go
 type BatchItems struct {
@@ -244,7 +244,7 @@ type BatchItems struct {
    Item    interface{} `json:"item"`
 }
 `````````````````````````````````````````````````
-### Scenario:
+#### Scenario:
 There are <b>12</b> gRPC connection instances stored in <b>3</b> batches.
 	<table>
 	<tr>
