@@ -12,7 +12,9 @@ grpc-connection-library is a library that supports the gRPC client-server connec
 
 ## Installation
 
-`go get github.com/Deeptiman/go-connection-library`
+````shell
+go get github.com/Deeptiman/go-connection-library
+````
 
 ## Demo
 
