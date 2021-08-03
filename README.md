@@ -1,6 +1,8 @@
 # grpc-connection-library
 grpc-connection-library is a library that supports the gRPC client-server connection interface for the developers to use as a gRPC middleware in the application. The library is written in Golang with a concurrency pipeline design pattern to synchronize the gRPC connection pool system.
 
+![GitHub top language](https://img.shields.io/github/languages/top/Deeptiman/grpc-connection-library)  [![Go Report Card](https://goreportcard.com/badge/github.com/Deeptiman/grpc-connection-library)](https://goreportcard.com/report/github.com/Deeptiman/grpc-connection-library)
+
 ## Features
 - The gRPC connection flow among server/client synchronized using the Ping/Pong services.
 - gRPC connection library supports connection pool reuse the gRPC client connection instance.
