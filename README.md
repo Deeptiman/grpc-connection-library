@@ -318,3 +318,7 @@ for {
 	return rcv.Interface().(batch.BatchItems)
 }
 ````````````````````````````````````````````````
+
+## References
+1. <a href="https://github.com/grpc-ecosystem/go-grpc-middleware">Go gRPC Middleware</a>
+2. <a href="https://www.oreilly.com/library/view/concurrency-in-go/9781491941294/ch04.html">Concurrency Pipeline Patterns</a>
