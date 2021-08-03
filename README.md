@@ -234,3 +234,87 @@ for s := range connEnqueuefn(connBatchfn(connReplicasfn(connInstancefn(done)))) 
 	}(s)
 }
 `````````````````````````````````````````````````
+
+# Batch Processing Item structure in the connection pool
+
+`````````````````````````````````````````````````go
+type BatchItems struct {
+   Id      int         `json:"id"`
+   BatchNo int         `json:"batchNo"`
+   Item    interface{} `json:"item"`
+}
+`````````````````````````````````````````````````
+### Scenario:
+There are <b>12</b> gRPC connection instances stored in <b>3</b> batches.
+	<table>
+	<tr>
+	<th align="left">Batch</th>	
+	<th align="left">Items</th>
+	</tr>
+	<tr>
+	<td align="top">Batch-1</td>
+	<td>
+	<table>
+	<tr><td>{Id: 1, BatchNo: 1, Item: *grpc.ClientConn}</td></tr>
+	<tr><td>{Id: 2, BatchNo: 1, Item: *grpc.ClientConn}</td></tr>
+	<tr><td>{Id: 3, BatchNo: 1, Item: *grpc.ClientConn}</td></tr>
+	<tr><td>{Id: 4, BatchNo: 1, Item: *grpc.ClientConn}</td></tr>
+	</table>
+	</td>
+	</tr>
+	<tr>
+	<td align="top">Batch-2</td>
+	<td>
+	<table>
+	<tr><td>{Id: 1, BatchNo: 2, Item: *grpc.ClientConn}</td></tr>
+	<tr><td>{Id: 2, BatchNo: 2, Item: *grpc.ClientConn}</td></tr>
+	<tr><td>{Id: 3, BatchNo: 2, Item: *grpc.ClientConn}</td></tr>
+	<tr><td>{Id: 4, BatchNo: 2, Item: *grpc.ClientConn}</td></tr>
+	</table>
+	</td>
+	</tr>
+	<tr>
+	<td align="top">Batch-3</td>
+	<td>
+	<table>
+	<tr><td>{Id: 1, BatchNo: 3, Item: *grpc.ClientConn}</td></tr>
+	<tr><td>{Id: 2, BatchNo: 3, Item: *grpc.ClientConn}</td></tr>
+	<tr><td>{Id: 3, BatchNo: 3, Item: *grpc.ClientConn}</td></tr>
+	<tr><td>{Id: 4, BatchNo: 3, Item: *grpc.ClientConn}</td></tr>
+	</table>
+	</td>
+	</tr>
+	</table>
+
+So, the connection pool stores the connection instances as a batch processing array []batch.BatchItems{}.
+
+## gRPC Connection Pool Selection Process
+The connection instance selection from the pool happens using the <b>reflect.SelectCase</b> package. The connection instances stored as a channel case in the []reflect.SelectCase{}. The search for any available connection instance from the pool works as a <b>pseudo-random</b> case selector.
+
+### Store conn instances into reflect.SelectCase
+````````````````````````````````````````````````go
+// The enqueCh will store the array of channel batchItems and get added to the reflect.SelectCase.
+   enqueCh    []chan batch.BatchItems
+   
+   q.itemSelect[i] = reflect.SelectCase{
+		Dir: reflect.SelectRecv, 
+		Chan: reflect.ValueOf(q.enqueCh[i])
+   }
+````````````````````````````````````````````````
+
+### Retrive conn instance from pool of cases
+````````````````````````````````````````````````go
+for {
+	chosen, rcv, ok := reflect.Select(q.itemSelect)
+	if !ok {
+		q.log.Infoln("Conn Batch Instance Not Chosen = ", chosen)
+		continue
+	}
+	q.log.Infoln("SelectCase", "Batch Conn : chosen = ", chosen)
+
+	// Remove the selected case from the array to avoid the duplicate choosing of the cases.
+	q.itemSelect = append(q.itemSelect[:chosen], q.itemSelect[chosen+1:]...)
+
+	return rcv.Interface().(batch.BatchItems)
+}
+````````````````````````````````````````````````
