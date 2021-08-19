@@ -321,8 +321,7 @@ for {
 }
 ````````````````````````````````````````````````
 ## License
-
-This project is licensed under the <a href="https://github.com/Deeptiman/grpc-connection-library/blob/master/LICENCE">MIT License</a>
+This project is licensed under the <a href="https://github.com/Deeptiman/grpc-connection-library/blob/master/LICENSE">MIT License</a>
 
 ## References
 1. <a href="https://github.com/grpc-ecosystem/go-grpc-middleware">Go gRPC Middleware</a>
